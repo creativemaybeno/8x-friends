@@ -9,7 +9,6 @@
       "type": "dart",
       "request": "launch",
       "program": "app/lib/main.dart",
-      "cwd": "${workspaceFolder}/app",
       "toolArgs": [
         "--dart-define-from-file=${workspaceFolder}/app/dart_define.json"
       ]
@@ -20,7 +19,6 @@
       "request": "launch",
       "flutterMode": "profile",
       "program": "app/lib/main.dart",
-      "cwd": "${workspaceFolder}/app",
       "toolArgs": [
         "--dart-define-from-file=${workspaceFolder}/app/dart_define.json"
       ]
@@ -31,7 +29,6 @@
       "request": "launch",
       "flutterMode": "release",
       "program": "app/lib/main.dart",
-      "cwd": "${workspaceFolder}/app",
       "toolArgs": [
         "--dart-define-from-file=${workspaceFolder}/app/dart_define.json"
       ]
@@ -41,7 +38,6 @@
       "type": "dart",
       "request": "launch",
       "program": "app/integration_test/p0_loop_test.dart",
-      "cwd": "${workspaceFolder}/app",
       "toolArgs": [
         "--dart-define-from-file=${workspaceFolder}/app/dart_define.json"
       ]
