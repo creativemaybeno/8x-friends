@@ -4,18 +4,22 @@ library;
 import 'package:flutter/material.dart';
 
 import '../../model/decay.dart';
+import '../../model/models.dart';
 import '../../state/app_state.dart';
 import '../../theme/tokens.dart';
 import 'sheet_scaffold.dart';
 
-/// The selection tick that sits at the end of every row.
-const double _tickSize = 20.0;
-const double _tickGlyph = 13.0;
+/// `Hannan` · `Hannan and Pilar` · `Hannan, Pilar and Rui`.
+String _joinNames(List<String> names) => switch (names.length) {
+  0 => 'Whoever you pick',
+  1 => names.first,
+  _ => '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}',
+};
 
-/// Adding friends to a plan you have just accepted.
+/// Adding people to a plan you have just accepted.
 ///
 /// The host does not get a veto — that is the point of this sheet, and the
-/// subtitle says so out loud.
+/// note says so out loud.
 class CircleSheet extends StatefulWidget {
   const CircleSheet({super.key});
 
@@ -30,7 +34,7 @@ class _CircleSheetState extends State<CircleSheet> {
     if (!_selected.remove(id)) _selected.add(id);
   });
 
-  void _add(AppState state, List<String> ids) {
+  void _invite(AppState state, List<String> ids) {
     for (final id in ids) {
       state.addToPlan(id);
     }
@@ -41,97 +45,87 @@ class _CircleSheetState extends State<CircleSheet> {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final plan = state.plan;
-    final host = plan == null ? null : state.personById(plan.hostPersonId);
-    final invited = plan?.attendees.keys.toSet() ?? const <String>{};
 
+    if (plan == null) {
+      return SheetScaffold(
+        label: 'add from your circle',
+        title: 'There is no plan to add to.',
+        actions: [
+          SheetAction(
+            label: 'Close',
+            kind: SheetActionKind.ghost,
+            onTap: state.goHome,
+          ),
+        ],
+      );
+    }
+
+    final host = state.personById(plan.hostPersonId);
+    final theirs = host == null || state.isMe(host.id) ? 'you' : host.name;
+    final invited = plan.attendees.keys.toSet();
+
+    // Who would most benefit from the evening: the faded ties first, and
+    // between two equally faded ones, the closer person.
     final candidates = [
       for (final p in state.directPeople)
         if (!invited.contains(p.id)) p,
     ];
+    candidates.sort((a, b) {
+      final da = state.decayWith(a.id);
+      final db = state.decayWith(b.id);
+      if (da != db) return db.compareTo(da);
+      final byCloseness = b.closeness.compareTo(a.closeness);
+      return byCloseness != 0 ? byCloseness : a.name.compareTo(b.name);
+    });
+    // A suggestion, not a directory. Five names is a decision; twelve is a
+    // list to get lost in — and the sheet must never need scrolling on stage.
+    if (candidates.length > 5) candidates.length = 5;
+
     final chosen = [
       for (final p in candidates)
-        if (_selected.contains(p.id)) p.id,
+        if (_selected.contains(p.id)) p,
     ];
+    final names = _joinNames([for (final p in chosen) p.name]);
 
     return SheetScaffold(
-      label: 'YOUR CIRCLE',
-      title: 'Bring someone along',
-      subtitle: host == null || state.isMe(host.id)
-          ? 'Add friends from your circle. Nobody needs to approve.'
-          : 'Add friends from your circle. ${host.name} does not need '
-                'to approve.',
-      accent: Tokens.violet,
-      onClose: state.goHome,
-      footer: Row(
-        children: [
-          Expanded(
-            child: SheetGhostButton(
-              label: 'NOT NOW',
-              accent: Tokens.violet,
-              onTap: state.goHome,
-            ),
+      label: 'add from your circle',
+      labelMark: Tokens.lime,
+      labelRight: chosen.isEmpty ? null : '${chosen.length} selected',
+      title: 'Who else should be there?',
+      rows: [
+        for (final p in candidates)
+          SheetRow(
+            initial: p.initial,
+            title: p.name,
+            sub:
+                '${Contexts.label(p.context)} · '
+                '${agoLabel(state.daysWith(p.id))}',
+            meta: _selected.contains(p.id) ? 'selected' : 'add',
+            metaColor: _selected.contains(p.id) ? Tokens.limeDeep : null,
+            selected: _selected.contains(p.id),
+            onTap: () => _toggle(p.id),
           ),
-          const SizedBox(width: Tokens.gapS),
-          Expanded(
-            flex: 2,
-            child: SheetButton(
-              label: 'ADD TO THE PLAN',
-              accent: Tokens.violet,
-              onTap: chosen.isEmpty ? null : () => _add(state, chosen),
-            ),
-          ),
-        ],
-      ),
-      child: candidates.isEmpty
-          ? Text(
-              'Everyone you have met is already coming.',
-              style: Tokens.sheetProse,
-            )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final p in candidates)
-                  SheetRow(
-                    title: p.name,
-                    meta: agoLabel(state.decay.daysOf(p.id)),
-                    dot: Tokens.contextColor(p.context),
-                    selected: _selected.contains(p.id),
-                    onTap: () => _toggle(p.id),
-                    trailing: _Tick(selected: _selected.contains(p.id)),
-                  ),
-              ],
-            ),
-    );
-  }
-}
-
-/// A quiet circle that fills violet once the person is coming along.
-class _Tick extends StatelessWidget {
-  const _Tick({required this.selected});
-
-  final bool selected;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: _tickSize,
-      height: _tickSize,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: selected ? Tokens.violet : Colors.transparent,
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: selected ? Tokens.violet : Tokens.borderColorStrong,
-          width: Tokens.hairline,
+      ],
+      note:
+          '$names will see the plan and who is going, not anything else '
+          'about $theirs.',
+      actions: [
+        SheetAction(
+          label: switch (chosen.length) {
+            0 => 'Invite',
+            1 => 'Invite ${chosen.first.name}',
+            _ => 'Invite ${chosen.length} people',
+          },
+          onTap: chosen.isEmpty
+              ? null
+              : () => _invite(state, [for (final p in chosen) p.id]),
         ),
-      ),
-      child: selected
-          ? const Icon(
-              Icons.check_rounded,
-              size: _tickGlyph,
-              color: Tokens.onAccent,
-            )
-          : null,
+        SheetAction(
+          label: 'Back',
+          kind: SheetActionKind.ghost,
+          onTap: state.goHome,
+        ),
+      ],
     );
   }
 }

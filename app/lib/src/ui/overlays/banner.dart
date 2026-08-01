@@ -1,7 +1,5 @@
-/// The in-app notification banner: an OS-style card that drops in from the top.
+/// The in-app push notification: the OS banner, rebuilt in paper.
 library;
-
-import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -9,31 +7,26 @@ import '../../model/models.dart';
 import '../../state/app_state.dart';
 import '../../theme/tokens.dart';
 
-/// iOS banner proportions. Geometry only — every colour and text style is a
-/// token.
-const double _inset = 14.0;
-const double _minHeight = 72.0;
-const double _padH = 12.0;
-const double _padTop = 12.0;
-const double _padBottom = 14.0;
-const double _iconSize = 34.0;
-const double _iconRadius = 10.0;
-const double _iconGlyph = 13.0;
-const double _timeNudge = 3.0;
-const double _titleGap = 3.0;
-const double _grabberWidth = 34.0;
-const double _grabberHeight = 3.0;
-const double _grabberInset = 5.0;
-const double _grabberRadius = 2.0;
-const double _shadowAlpha = 0.55;
-const double _shadowBlur = 26.0;
-const double _shadowOffsetY = 10.0;
+// Geometry from the design (`Phone8x` 2d). Colour and type are tokens.
+const double _insetH = 12.0;
+const double _insetTop = 6.0;
+const EdgeInsets _padding = EdgeInsets.fromLTRB(20, 18, 20, 20);
+const double _markSize = 24.0;
+const double _markGlyph = 9.0;
+const double _markGap = 10.0;
+const double _appRowGap = 11.0;
+const double _titleGap = 6.0;
 
-/// Where the card waits between notifications: fully clear of the notch.
-const Offset _hidden = Offset(0, -1.4);
+/// `p8drop`: the card falls this far while it fades in.
+const double _drop = 16.0;
 
-/// Slides down whenever `state.banner` is set, and leaves on a tap, a swipe,
-/// or by itself after [Tokens.bannerDwell].
+const double _shadowAlpha = 0.4;
+const double _shadowBlur = 32.0;
+const double _shadowSpread = -14.0;
+const double _shadowY = 14.0;
+
+/// Drops in whenever `state.banner` is set, and leaves on a tap, a swipe, or
+/// by itself after [Tokens.bannerDwell].
 ///
 /// Must be the last-but-one layer of the shell `Stack` so it covers the
 /// sheets — a notification that arrives behind the interface is not a
@@ -47,7 +40,7 @@ class NotificationBannerOverlay extends StatefulWidget {
 }
 
 class _NotificationBannerOverlayState extends State<NotificationBannerOverlay> {
-  /// The card keeps rendering its last content while it slides back out.
+  /// The card keeps rendering its last content while it fades back out.
   AppNotification? _last;
 
   @override
@@ -63,26 +56,30 @@ class _NotificationBannerOverlayState extends State<NotificationBannerOverlay> {
       right: 0,
       child: SafeArea(
         bottom: false,
-        child: IgnorePointer(
-          ignoring: live == null,
-          child: AnimatedSlide(
-            offset: live == null ? _hidden : Offset.zero,
-            duration: Tokens.bannerDuration,
-            curve: Tokens.bannerCurve,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(_insetH, _insetTop, _insetH, 0),
+          child: IgnorePointer(
+            ignoring: live == null,
             child: AnimatedOpacity(
               opacity: live == null ? 0 : 1,
               duration: Tokens.bannerDuration,
               curve: Tokens.bannerCurve,
-              child: shown == null
-                  ? const SizedBox.shrink()
-                  : Padding(
-                      padding: const EdgeInsets.all(_inset),
-                      child: _BannerCard(
+              child: AnimatedContainer(
+                duration: Tokens.bannerDuration,
+                curve: Tokens.bannerCurve,
+                transform: Matrix4.translationValues(
+                  0,
+                  live == null ? -_drop : 0,
+                  0,
+                ),
+                child: shown == null
+                    ? const SizedBox.shrink()
+                    : _BannerCard(
                         notification: shown,
                         onTap: state.tapBanner,
                         onDismiss: state.dismissBanner,
                       ),
-                    ),
+              ),
             ),
           ),
         ),
@@ -104,7 +101,6 @@ class _BannerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const radius = BorderRadius.all(Radius.circular(Tokens.radiusCard * 1.4));
     return GestureDetector(
       onTap: onTap,
       behavior: HitTestBehavior.opaque,
@@ -112,135 +108,72 @@ class _BannerCard extends StatelessWidget {
       onVerticalDragEnd: (details) {
         if ((details.primaryVelocity ?? 0) < 0) onDismiss();
       },
-      child: DecoratedBox(
+      child: Container(
+        padding: _padding,
         decoration: BoxDecoration(
-          borderRadius: radius,
+          color: Tokens.card,
+          borderRadius: BorderRadius.circular(Tokens.radiusNotif),
+          border: Border.all(color: Tokens.hairInk05, width: Tokens.hairline),
           boxShadow: [
             BoxShadow(
-              color: Tokens.void_.withValues(alpha: _shadowAlpha),
+              color: Tokens.ink.withValues(alpha: _shadowAlpha),
               blurRadius: _shadowBlur,
-              offset: const Offset(0, _shadowOffsetY),
+              spreadRadius: _shadowSpread,
+              offset: const Offset(0, _shadowY),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: radius,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(
-              sigmaX: Tokens.sheetBlur,
-              sigmaY: Tokens.sheetBlur,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const _AppMark(),
+                const SizedBox(width: _markGap),
+                Text('friends', style: Tokens.notifApp),
+                const Spacer(),
+                Text('now', style: Tokens.notifWhen),
+              ],
             ),
-            child: Container(
-              constraints: const BoxConstraints(minHeight: _minHeight),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Tokens.sheetTop, Tokens.sheetBottom],
-                ),
-                borderRadius: radius,
-                border: Border.all(
-                  color: Tokens.borderColor,
-                  width: Tokens.hairline,
-                ),
-              ),
-              child: Stack(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(
-                      _padH,
-                      _padTop,
-                      _padH,
-                      _padBottom,
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _AppTile(),
-                        const SizedBox(width: Tokens.gapS),
-                        Expanded(
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                notification.title,
-                                style: Tokens.bannerTitle,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(height: _titleGap),
-                              Text(
-                                notification.body,
-                                style: Tokens.bannerBody,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: Tokens.gapS),
-                        Padding(
-                          padding: const EdgeInsets.only(top: _timeNudge),
-                          child: Text('NOW', style: Tokens.monoLabelDim),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: _grabberInset,
-                    child: Center(child: _Grabber()),
-                  ),
-                ],
-              ),
+            const SizedBox(height: _appRowGap),
+            Text(
+              notification.title,
+              style: Tokens.notifTitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
-          ),
+            const SizedBox(height: _titleGap),
+            Text(
+              notification.body,
+              style: Tokens.notifBody,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-/// The 34x34 "app icon" every OS banner leads with.
-class _AppTile extends StatelessWidget {
-  const _AppTile();
+/// The lime app mark every banner leads with.
+class _AppMark extends StatelessWidget {
+  const _AppMark();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: _iconSize,
-      height: _iconSize,
+      width: _markSize,
+      height: _markSize,
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: Tokens.borderColor,
-        borderRadius: BorderRadius.circular(_iconRadius),
-        border: Border.all(
-          color: Tokens.borderColorStrong,
-          width: Tokens.hairline,
-        ),
+      decoration: const BoxDecoration(
+        color: Tokens.lime,
+        shape: BoxShape.circle,
       ),
       child: Text(
-        '8x',
-        style: Tokens.monoLabelBright.copyWith(fontSize: _iconGlyph),
-      ),
-    );
-  }
-}
-
-/// The small pull bar that tells a thumb the card can be swiped away.
-class _Grabber extends StatelessWidget {
-  const _Grabber();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: _grabberWidth,
-      height: _grabberHeight,
-      decoration: BoxDecoration(
-        color: Tokens.borderColorStrong,
-        borderRadius: BorderRadius.circular(_grabberRadius),
+        '8xF',
+        style: Tokens.wordmarkMark.copyWith(fontSize: _markGlyph),
       ),
     );
   }

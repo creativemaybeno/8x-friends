@@ -4,6 +4,7 @@ library;
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/env.dart';
@@ -21,6 +22,16 @@ import 'src/ui/shell.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Tokens.init();
+  // Paper build: dark status-bar glyphs on a light background.
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.light,
+      systemNavigationBarColor: Tokens.paper,
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ),
+  );
   runApp(const EightXFriendsApp());
 }
 

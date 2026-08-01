@@ -1,35 +1,49 @@
-/// The calm celebration that lands the moment a real meet-up is confirmed.
+/// The lime card that lands the moment a real meet-up is confirmed.
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../model/decay.dart';
+import '../../model/models.dart';
 import '../../state/app_state.dart';
 import '../../theme/tokens.dart';
 
-/// Geometry and opacity only this celebration needs.
-const double _ringBox = 132.0;
-const double _coreRadius = 20.0;
-const double _ringSpan = 42.0;
-const int _ringCount = 3;
-const double _ringStagger = 0.18;
-const double _ringStroke = 1.4;
-const double _ringAlpha = 0.5;
-const double _coreFillAlpha = 0.10;
-const double _coreStrokeAlpha = 0.75;
-const double _dotRadius = 4.0;
-const double _dotSpread = 15.0;
-const double _linkStroke = 2.2;
-const double _linkAlphaFrom = 0.25;
-const double _scaleFrom = 0.86;
-const double _scrimAlpha = 0.78;
-const double _scrimRadius = 0.95;
-const double _glowAlpha = 0.13;
-const double _glowRadius = 0.55;
-const double _captionMaxWidth = 300.0;
+// Geometry from the design (`Phone8x` 2e). Colour and type are tokens.
+const double _insetH = 26.0;
 
-/// Full-screen, non-interactive. Visible while `state.renewedMessage` is set:
-/// one green ring opening out of a renewed link, the headline, and the people
-/// it belongs to. No confetti — the product is calm.
+/// `top:268` on the design's 874-tall frame.
+const double _topFraction = 268 / 874;
+
+const EdgeInsets _padding = EdgeInsets.fromLTRB(30, 34, 30, 30);
+const double _eyebrowGap = 20.0;
+const double _lineGap = 26.0;
+const double _meterGap = 20.0;
+const double _meterSpacing = 12.0;
+const double _meterHeight = 6.0;
+
+/// The fill is fixed in the design: a renewal always reads as a full bar.
+const double _meterFill = 0.96;
+
+const double _scaleFrom = 0.95;
+const Duration _entrance = Duration(milliseconds: 500);
+
+const double _shadowAlpha = 0.45;
+const double _shadowBlur = 46.0;
+const double _shadowSpread = -20.0;
+const double _shadowY = 20.0;
+
+/// The old signal, quiet. The new one, full weight.
+TextStyle get _meterFrom => Tokens.timeHint.copyWith(
+  fontSize: 13,
+  color: Tokens.ink.withValues(alpha: 0.5),
+);
+
+TextStyle get _meterTo =>
+    Tokens.timeHint.copyWith(fontSize: 15, color: Tokens.ink);
+
+/// Non-interactive, so the graph keeps moving underneath. Visible while
+/// `state.renewedMessage` is set: one lime card that names what just got
+/// stronger and by how much. No confetti — the product is calm.
 class RenewedOverlay extends StatefulWidget {
   const RenewedOverlay({super.key});
 
@@ -38,9 +52,11 @@ class RenewedOverlay extends StatefulWidget {
 }
 
 class _RenewedOverlayState extends State<RenewedOverlay> {
-  /// Held after the state clears so the overlay fades out instead of blinking.
-  String? _message;
-  String _names = '';
+  /// Held after the state clears so the card fades out instead of blinking.
+  String? _line;
+  String _sub = '';
+  String _from = '';
+  String _to = '';
   bool _visible = false;
 
   /// Bumped on every appearance so the entrance tween runs again.
@@ -52,184 +68,179 @@ class _RenewedOverlayState extends State<RenewedOverlay> {
     final live = state.renewedMessage;
     if (live != null) {
       if (!_visible) _cycle++;
-      _message = live;
-      _names = _namesOf(state);
+      _read(state);
     }
     _visible = live != null;
-    final message = _message;
+    final line = _line;
 
     return IgnorePointer(
-      child: SizedBox.expand(
-        child: AnimatedOpacity(
-          opacity: _visible ? 1.0 : 0.0,
-          duration: Tokens.sheetDuration,
+      child: LayoutBuilder(
+        builder: (context, constraints) => AnimatedOpacity(
+          opacity: _visible ? 1 : 0,
+          duration: _entrance,
           curve: Tokens.sheetCurve,
-          child: message == null
+          child: line == null
               ? const SizedBox.shrink()
-              : Stack(
-                  children: [
-                    const Positioned.fill(child: _Glow()),
-                    Center(
-                      child: TweenAnimationBuilder<double>(
+              : Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    _insetH,
+                    constraints.maxHeight * _topFraction,
+                    _insetH,
+                    0,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TweenAnimationBuilder<double>(
                         key: ValueKey(_cycle),
                         tween: Tween<double>(begin: 0, end: 1),
-                        duration: Tokens.renewAnimation,
+                        duration: _entrance,
                         curve: Tokens.sheetCurve,
                         builder: (context, t, child) => Transform.scale(
                           scale: Tokens.lerp(_scaleFrom, 1, t),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              SizedBox(
-                                width: _ringBox,
-                                height: _ringBox,
-                                child: CustomPaint(
-                                  painter: _RenewRingPainter(t),
-                                ),
-                              ),
-                              const SizedBox(height: Tokens.gapL),
-                              child!,
-                            ],
-                          ),
+                          child: child,
                         ),
-                        child: _Caption(message: message, names: _names),
+                        child: _RenewedCard(
+                          line: line,
+                          from: _from,
+                          to: _to,
+                          sub: _sub,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
         ),
       ),
     );
   }
 
-  /// `Calvin, Yassie and Hannan` — everyone the meet-up renewed.
-  String _namesOf(AppState state) {
+  /// Everything the card says, read off the plan that just closed.
+  void _read(AppState state) {
+    final people = _renewedPeople(state);
+    _line = _headline(people);
+
+    final edge = people.isEmpty ? null : state.edgeWith(people.first.id);
+    if (edge == null) {
+      _from = '';
+      _to = '';
+      _sub =
+          'One evening put every tie you already had back at full signal. '
+          'Meeting is the only thing that counts.';
+      return;
+    }
+
+    final gap = edge.seedDaysSince.toDouble();
+    final before = decayFor(gap, horizon: edge.horizonDays);
+    _from = '${signalFor(before)}%';
+    _to = '${signalFor(state.decayWith(people.first.id))}%';
+    _sub = people.length == 1
+        ? 'One evening closed a gap of ${durationLabel(gap)}. Your rhythm has '
+              'been re-learned from the meet-up — you two are back to meeting '
+              '${edge.rhythmLabel}.'
+        : 'One evening closed a gap of ${durationLabel(gap)}. Every tie you '
+              'already had has been re-learned from the meet-up.';
+  }
+
+  /// Who the renewal belongs to: the plan's accepted attendees, minus me,
+  /// narrowed to the ones I actually have an edge with.
+  List<Person> _renewedPeople(AppState state) {
     final plan = state.plan;
-    if (plan == null) return '';
-    final names = <String>[];
+    if (plan == null) return const [];
+    final all = <Person>[];
     for (final id in plan.acceptedIds) {
+      if (state.isMe(id)) continue;
       final person = state.personById(id);
-      if (person != null) names.add(person.name);
+      if (person != null) all.add(person);
     }
-    if (names.isEmpty) return '';
-    if (names.length == 1) return names.first;
-    final head = names.sublist(0, names.length - 1).join(', ');
-    return '$head and ${names.last}';
+    final direct = [
+      for (final p in all)
+        if (state.edgeWith(p.id) != null) p,
+    ];
+    return direct.isEmpty ? all : direct;
+  }
+
+  String _headline(List<Person> people) {
+    if (people.isEmpty) return 'You are back in rhythm.';
+    if (people.length == 1) {
+      return 'You and ${people.first.name} are back in rhythm.';
+    }
+    final names = [for (final p in people) p.name].join(', ');
+    return '$names and you are back in rhythm.';
   }
 }
 
-/// A soft green light in the middle of the graph, over a gentle vignette so
-/// the words stay readable against a busy network.
-class _Glow extends StatelessWidget {
-  const _Glow();
+class _RenewedCard extends StatelessWidget {
+  const _RenewedCard({
+    required this.line,
+    required this.from,
+    required this.to,
+    required this.sub,
+  });
+
+  final String line;
+  final String from;
+  final String to;
+  final String sub;
 
   @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: BoxDecoration(
-      gradient: RadialGradient(
-        radius: _scrimRadius,
-        colors: [
-          Tokens.void_.withValues(alpha: _scrimAlpha),
-          Tokens.void_.withValues(alpha: 0),
-        ],
-      ),
-    ),
-    child: DecoratedBox(
+  Widget build(BuildContext context) {
+    return Container(
+      padding: _padding,
       decoration: BoxDecoration(
-        gradient: RadialGradient(
-          radius: _glowRadius,
-          colors: [
-            Tokens.green.withValues(alpha: _glowAlpha),
-            Tokens.green.withValues(alpha: 0),
+        color: Tokens.lime,
+        borderRadius: BorderRadius.circular(Tokens.radiusRenewed),
+        boxShadow: [
+          BoxShadow(
+            color: Tokens.ink.withValues(alpha: _shadowAlpha),
+            blurRadius: _shadowBlur,
+            spreadRadius: _shadowSpread,
+            offset: const Offset(0, _shadowY),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('connection renewed', style: Tokens.renewedEyebrow),
+          const SizedBox(height: _eyebrowGap),
+          Text(line, style: Tokens.renewedLine),
+          const SizedBox(height: _lineGap),
+          if (to.isNotEmpty) ...[
+            Row(
+              children: [
+                Text(from, style: _meterFrom),
+                const SizedBox(width: _meterSpacing),
+                const Expanded(child: _Meter()),
+                const SizedBox(width: _meterSpacing),
+                Text(to, style: _meterTo),
+              ],
+            ),
+            const SizedBox(height: _meterGap),
           ],
-        ),
+          Text(sub, style: Tokens.renewedSub),
+        ],
+      ),
+    );
+  }
+}
+
+/// Ink on a dark-lime track. The fill is the design's, not the data's.
+class _Meter extends StatelessWidget {
+  const _Meter();
+
+  @override
+  Widget build(BuildContext context) => ClipRRect(
+    borderRadius: BorderRadius.circular(999),
+    child: Container(
+      height: _meterHeight,
+      color: Tokens.hairInk18,
+      child: const FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: _meterFill,
+        child: DecoratedBox(decoration: BoxDecoration(color: Tokens.ink)),
       ),
     ),
   );
-}
-
-class _Caption extends StatelessWidget {
-  const _Caption({required this.message, required this.names});
-
-  final String message;
-  final String names;
-
-  @override
-  Widget build(BuildContext context) => ConstrainedBox(
-    constraints: const BoxConstraints(maxWidth: _captionMaxWidth),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text(
-          message.toUpperCase(),
-          textAlign: TextAlign.center,
-          style: Tokens.renewedTitle,
-        ),
-        if (names.isNotEmpty) ...[
-          const SizedBox(height: Tokens.gapS),
-          Text(names, textAlign: TextAlign.center, style: Tokens.sheetProse),
-        ],
-      ],
-    ),
-  );
-}
-
-/// One link, two people, and rings opening out of them.
-class _RenewRingPainter extends CustomPainter {
-  const _RenewRingPainter(this.t);
-
-  /// 0 to 1 across [Tokens.renewAnimation].
-  final double t;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (!t.isFinite) return;
-    final centre = size.center(Offset.zero);
-    final span = (1 - (_ringCount - 1) * _ringStagger).clamp(0.01, 1.0);
-
-    for (var i = 0; i < _ringCount; i++) {
-      final p = ((t - i * _ringStagger) / span).clamp(0.0, 1.0);
-      final alpha = (1 - p) * _ringAlpha;
-      if (p <= 0 || alpha <= 0.01) continue;
-      canvas.drawCircle(
-        centre,
-        _coreRadius + p * _ringSpan,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = _ringStroke
-          ..color = Tokens.green.withValues(alpha: alpha),
-      );
-    }
-
-    canvas.drawCircle(
-      centre,
-      _coreRadius,
-      Paint()..color = Tokens.green.withValues(alpha: _coreFillAlpha * t),
-    );
-    canvas.drawCircle(
-      centre,
-      _coreRadius,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = Tokens.selectionRingStroke
-        ..color = Tokens.green.withValues(alpha: _coreStrokeAlpha * t),
-    );
-
-    final left = centre - const Offset(_dotSpread, 0);
-    final right = centre + const Offset(_dotSpread, 0);
-    final linkAlpha = (_linkAlphaFrom + (1 - _linkAlphaFrom) * t).clamp(
-      0.0,
-      1.0,
-    );
-    final ink = Paint()
-      ..color = Tokens.green.withValues(alpha: linkAlpha)
-      ..strokeCap = StrokeCap.round;
-    canvas.drawLine(left, right, ink..strokeWidth = _linkStroke);
-    canvas.drawCircle(left, _dotRadius, ink);
-    canvas.drawCircle(right, _dotRadius, ink);
-  }
-
-  @override
-  bool shouldRepaint(covariant _RenewRingPainter oldDelegate) =>
-      oldDelegate.t != t;
 }

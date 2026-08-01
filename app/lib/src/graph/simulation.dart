@@ -16,17 +16,46 @@ const double _minSeparation = 2.0;
 const double _fixedStep = 1 / 60;
 const int _maxStepsPerFrame = 3;
 
-/// Someone 600 km away would otherwise leave the frame at any usable zoom.
-const double _maxDistanceRadius = 620.0;
+/// Someone I am not connected to reads as a neutral, half-faded tie.
+const double _indirectDecay = 0.5;
 
-/// Gathering a plan must never launch a node across the screen. Capping the
-/// cluster force turns a slingshot into a walk: the group closes in about a
-/// second and the rest of the graph keeps simulating undisturbed.
-const double _planClusterClamp = 1.6;
+/// Attractor strengths. The design lerps positions over 340 offline
+/// iterations; here the same targets are springs, so the numbers differ but
+/// the ordering does not.
+const double _kOrbit = 0.11;
+const double _kNear = 0.11;
+const double _kFocus = 0.13;
+const double _kFocusRing = 0.055;
+const double _kFocusOther = 0.05;
+const double _kCluster = 0.10;
+const double _kClusterOther = 0.05;
+
+/// Focus and cluster anchors, straight from the design's layout physics.
+const Offset _focusAnchor = Offset(0, -26);
+const double _focusRingRadius = 112;
+const double _focusOtherRadius = 300;
+const Offset _clusterAnchor = Offset(0, -54);
+const Offset _clusterOtherAnchor = Offset(0, -44);
+const double _clusterOtherRadius = 150;
 
 /// Someone who has not accepted yet hovers just outside the cluster, and
 /// settles into it the moment they do.
 const double _pendingClusterFactor = 1.22;
+
+/// Ring order around me: contexts become arcs, so clusters read.
+const List<String> _ringOrder = [
+  Contexts.family,
+  Contexts.uni,
+  Contexts.work,
+  Contexts.climb,
+  Contexts.hood,
+];
+
+/// Phase per distance band, so the three rings do not line up.
+const List<double> _bandPhase = [0.3, 0.62, 0.14];
+
+/// What a node is *to me*. Drives radius, fill and whether it is named.
+enum NodeKind { me, direct, indirect }
 
 class SimNode {
   SimNode({
@@ -34,7 +63,7 @@ class SimNode {
     required this.pos,
     required this.radius,
     required this.phase,
-    this.isMe = false,
+    required this.kind,
     this.context,
     this.closeness = 1,
     this.distanceKm = 0,
@@ -45,19 +74,28 @@ class SimNode {
   Offset vel;
   double radius;
   final double phase;
-  bool isMe;
+  NodeKind kind;
   bool pinned = false;
   String? context;
   int closeness;
 
-  /// Approximate kilometres from me. Read by the distance view only.
+  /// Their own approximate kilometres from home. Read by the nearby view.
   double distanceKm;
+
+  /// Where this node sits on the orbit ring and on its distance band.
+  double orbitAngle = 0;
+  double nearAngle = 0;
+
+  /// The slot it holds in the focus halo or the plan cluster, if it has one.
+  double? slotAngle;
 
   /// In the active plan — clusters with the other attendees.
   bool inPlan = false;
 
   /// In the plan, but has not accepted yet.
   bool pending = false;
+
+  bool get isMe => kind == NodeKind.me;
 }
 
 class SimLink {
@@ -79,12 +117,13 @@ class Simulation {
   /// Ids in the plan that have not accepted.
   Set<String> pendingIds = const {};
 
-  /// Extra link pairs to draw dashed (plan links). Key = Relationship.keyFor.
-  Set<String> planLinkKeys = const {};
+  /// The node the focus layout is built around, if any.
+  String? focusId;
 
   final Map<String, SimNode> _nodes = {};
   final List<SimLink> _links = [];
   final Map<String, double> _decay = {};
+  final Map<String, Set<String>> _adj = {};
   String? _meId;
   double _t = 0;
   double _acc = 0;
@@ -93,7 +132,7 @@ class Simulation {
   /// node would reuse a spiral index and stack two nodes on one point.
   int _spawns = 0;
 
-  /// Seconds since the simulation started. Drives breathing and fragments.
+  /// Seconds since the simulation started. Drives every breathing animation.
   double get time => _t;
 
   Iterable<SimNode> get nodes => _nodes.values;
@@ -101,7 +140,10 @@ class Simulation {
 
   SimNode? nodeById(String id) => _nodes[id];
 
-  double decayOf(String id) => _decay[id] ?? 1.0;
+  /// How faded *my* tie to [id] is. Indirect people read neutral.
+  double decayOf(String id) => _decay[id] ?? _indirectDecay;
+
+  bool isNeighbour(String a, String b) => _adj[a]?.contains(b) ?? false;
 
   /// Centre of the plan cluster, for the camera to frame. Falls back to the
   /// me node, then to the origin, so a caller never reads a NaN.
@@ -135,74 +177,85 @@ class Simulation {
     final seen = <String>{};
 
     // A node's brightness is *my* relationship with that person, not how
-    // active they are: a direct edge to me wins over their own last meet-up.
-    // Built once per sync, never inside the loop below.
+    // active they are. Built once per sync, never inside the loop below.
     final myEdges = <String, Relationship>{};
     for (final r in rels) {
       final otherId = r.other(meId);
       if (otherId != null) myEdges[otherId] = r;
     }
 
-    // The distance view rings people around whoever holds the phone, but the
-    // fixture measures `distanceKm` from Calvin. Everyone sits on one axis out
-    // of Berlin, so the difference along that axis is a fair one-dimensional
-    // approximation — honest for a demo, not a real geodesic.
-    var meKm = 0.0;
-    for (final p in people) {
-      if (p.id == meId) meKm = p.distanceKm;
-    }
-
     for (final p in people) {
       seen.add(p.id);
-      final isMe = p.id == meId;
       final myEdge = myEdges[p.id];
-      _decay[p.id] = isMe
-          ? 0.0 // you are always fully present
+      final kind = p.id == meId
+          ? NodeKind.me
           : myEdge != null
-          ? decay.linkDecayOf(myEdge)
-          : decay.decayOf(p.id);
-      final distanceKm = (p.distanceKm - meKm).abs();
-      final radius = Tokens.nodeRadius(p.closeness, isMe: isMe);
+          ? NodeKind.direct
+          : NodeKind.indirect;
+      _decay[p.id] = switch (kind) {
+        NodeKind.me => 0.0, // you are always fully present
+        NodeKind.direct => decay.linkDecayOf(myEdge!),
+        NodeKind.indirect => _indirectDecay,
+      };
+      final radius = switch (kind) {
+        NodeKind.me => Tokens.nodeRadiusMe,
+        NodeKind.direct => Tokens.nodeRadius(p.closeness),
+        NodeKind.indirect =>
+          planIds.contains(p.id)
+              ? Tokens.nodeRadiusIndirectInPlan
+              : Tokens.nodeRadiusIndirect,
+      };
       final existing = _nodes[p.id];
       if (existing == null) {
         _nodes[p.id] = SimNode(
           id: p.id,
-          pos: isMe ? Offset.zero : _initialPos(_spawns++),
+          pos: kind == NodeKind.me ? Offset.zero : _initialPos(_spawns++),
           radius: radius,
           phase: _phaseOf(p.id),
-          isMe: isMe,
+          kind: kind,
           context: p.context,
           closeness: p.closeness,
-          distanceKm: distanceKm,
+          distanceKm: p.distanceKm,
         );
       } else {
-        existing.radius = radius;
-        existing.context = p.context;
-        existing.closeness = p.closeness;
-        existing.isMe = isMe;
-        existing.distanceKm = distanceKm;
+        existing
+          ..radius = radius
+          ..kind = kind
+          ..context = p.context
+          ..closeness = p.closeness
+          ..distanceKm = p.distanceKm;
       }
     }
 
     _nodes.removeWhere((id, _) => !seen.contains(id));
     _decay.removeWhere((id, _) => !seen.contains(id));
 
-    _links
-      ..clear()
-      ..addAll([
-        for (final r in rels)
-          if (_nodes.containsKey(r.aPersonId) &&
-              _nodes.containsKey(r.bPersonId))
-            SimLink(r.aPersonId, r.bPersonId, decay.linkDecayOf(r)),
-      ]);
+    // An edge between two people I do not know is noise: the graph is my
+    // circle and the ties inside it.
+    _links.clear();
+    _adj.clear();
+    for (final r in rels) {
+      final a = _nodes[r.aPersonId];
+      final b = _nodes[r.bPersonId];
+      if (a == null || b == null) continue;
+      if (_meId != null &&
+          a.kind == NodeKind.indirect &&
+          b.kind == NodeKind.indirect) {
+        continue;
+      }
+      _links.add(SimLink(a.id, b.id, decay.linkDecayOf(r)));
+      (_adj[a.id] ??= <String>{}).add(b.id);
+      (_adj[b.id] ??= <String>{}).add(a.id);
+    }
 
-    _applyPlanFlags();
+    _assignRings();
+    _refreshSlots();
   }
 
   void tick(double dt) {
     // The caller may set [planIds] before or after [sync]; refreshing here
     // means a frame never simulates against a stale plan.
-    _applyPlanFlags();
+    _refreshSlots();
     _t += dt;
     _acc += dt;
     var steps = 0;
@@ -229,10 +282,50 @@ class Simulation {
 
   // --- internals ------------------------------------------------------------
 
-  void _applyPlanFlags() {
+  /// Fixed angular slots: contexts in ring order around me, and one ordered
+  /// sweep per distance band. Deterministic, so the layout never shuffles.
+  void _assignRings() {
+    final direct = <SimNode>[
+      for (final n in _nodes.values)
+        if (n.kind == NodeKind.direct) n,
+    ]..sort(_byRing);
+    for (var i = 0; i < direct.length; i++) {
+      direct[i].orbitAngle = -math.pi / 2 + i / direct.length * 2 * math.pi;
+    }
+
+    for (var b = 0; b < Tokens.bandRings.length; b++) {
+      final band = <SimNode>[
+        for (final n in _nodes.values)
+          if (!n.isMe && Tokens.distanceBand(_km(n)) == b) n,
+      ]..sort((x, y) => _nearRank(x.id).compareTo(_nearRank(y.id)));
+      for (var i = 0; i < band.length; i++) {
+        band[i].nearAngle = (_bandPhase[b] + i / band.length) * 2 * math.pi;
+      }
+    }
+  }
+
+  /// The plan cluster and the focus halo both hand out numbered slots.
+  void _refreshSlots() {
     for (final n in _nodes.values) {
       n.inPlan = planIds.contains(n.id);
       n.pending = n.inPlan && pendingIds.contains(n.id);
+      n.slotAngle = null;
+    }
+
+    if (planIds.length >= 2) {
+      final ids = planIds.toList()..sort();
+      for (var i = 0; i < ids.length; i++) {
+        _nodes[ids[i]]?.slotAngle = -math.pi / 2 + i / ids.length * 2 * math.pi;
+      }
+      return;
+    }
+
+    final f = focusId;
+    if (f == null || !_nodes.containsKey(f)) return;
+    final ring = <String>{...?_adj[f], ?_meId}..remove(f);
+    final ids = ring.toList()..sort();
+    for (var i = 0; i < ids.length; i++) {
+      _nodes[ids[i]]?.slotAngle = i / ids.length * 2 * math.pi + 0.45;
     }
   }
 
@@ -286,9 +379,10 @@ class Simulation {
     }
 
     final me = _nodes[_meId];
-    final centre = me?.pos ?? Offset.zero;
-    final hasPlan = planIds.isNotEmpty;
-    final cluster = hasPlan ? planCentroid : Offset.zero;
+    final centre = me == null ? Offset.zero : me.pos;
+    final clustered = planIds.length >= 2;
+    final focus = focusId;
+    final focusNode = focus == null ? null : _nodes[focus];
 
     for (final n in list) {
       if (n.pinned) {
@@ -297,26 +391,50 @@ class Simulation {
         n.vel = Offset.zero;
         continue;
       }
-      if (n.isMe) {
-        n.vel -= n.pos * Tokens.meCentring;
-      } else {
-        switch (view) {
-          case GraphView.health:
-            n.vel -= n.pos * Tokens.globalCentring;
-          case GraphView.distance:
-            _pullR(n, centre, _distanceRadius(n), Tokens.distanceStrength);
+      final slot = n.slotAngle;
+      if (clustered) {
+        if (n.inPlan && slot != null) {
+          final rad =
+              Tokens.planClusterRadius *
+              (n.pending ? _pendingClusterFactor : 1.0);
+          _attract(n, _ringPoint(_clusterAnchor, rad, slot), _kCluster);
+        } else {
+          _pullR(n, _clusterOtherAnchor, _clusterOtherRadius, _kClusterOther);
         }
+      } else if (focusNode != null) {
+        if (n.id == focus) {
+          _attract(n, _focusAnchor, _kFocus);
+        } else if (slot != null) {
+          _attract(
+            n,
+            _ringPoint(_focusAnchor, _focusRingRadius, slot),
+            _kFocusRing,
+          );
+        } else {
+          _pullR(n, _focusAnchor, _focusOtherRadius, _kFocusOther);
+        }
+      } else if (n.isMe) {
+        n.vel -= n.pos * Tokens.meCentring;
+      } else if (view == GraphView.distance) {
+        _attract(n, _ringPoint(centre, _bandRadius(n), n.nearAngle), _kNear);
+      } else if (n.kind == NodeKind.direct) {
+        // Faded people literally sit further out. That is the product.
+        _attract(n, _ringPoint(centre, _orbitRadius(n), n.orbitAngle), _kOrbit);
+      } else {
+        n.vel -= n.pos * Tokens.globalCentring;
       }
-
-      // The plan is an extra force, never a replacement: the attendees gather
-      // while everyone else keeps living in the same graph.
-      if (hasPlan && n.inPlan) _pullCluster(n, cluster);
 
       n.vel *= Tokens.damping;
       final speed = n.vel.distance;
       if (speed > _maxSpeed) n.vel = n.vel / speed * _maxSpeed;
       n.pos += n.vel;
     }
+  }
+
+  void _attract(SimNode n, Offset target, double k) {
+    final rel = n.pos - target;
+    if (!rel.dx.isFinite || !rel.dy.isFinite) return;
+    n.vel -= rel * k;
   }
 
   /// Radial pull toward a ring of radius [target] around [centre].
@@ -330,34 +448,34 @@ class Simulation {
     n.vel -= rel / r * ((r - target) * k);
   }
 
-  /// The gathering force. A ring, not a point — attendees close in but keep
-  /// their own space, and the pull is capped so the cluster settles rather
-  /// than snaps.
-  void _pullCluster(SimNode n, Offset centre) {
-    final target = n.pending
-        ? Tokens.planClusterRadius * _pendingClusterFactor
-        : Tokens.planClusterRadius;
-    final rel = n.pos - centre;
-    final r = rel.distance;
-    if (r < 0.001) {
-      n.vel +=
-          Offset(math.cos(n.phase), math.sin(n.phase)) *
-          Tokens.planClusterStrength *
-          target;
-      return;
-    }
-    final f = ((r - target) * Tokens.planClusterStrength).clamp(
-      -_planClusterClamp,
-      _planClusterClamp,
-    );
-    n.vel -= rel / r * f;
+  double _orbitRadius(SimNode n) {
+    final dec = (_decay[n.id] ?? _indirectDecay).clamp(0.0, 1.0);
+    final jitter = (n.id.length > 1 ? (n.id.codeUnitAt(1) % 9) - 4 : 0) * 2.5;
+    return Tokens.orbitRadiusBase + dec * Tokens.orbitRadiusDecay + jitter;
   }
 
-  double _distanceRadius(SimNode n) {
-    final km = n.distanceKm.isFinite ? math.max(0.0, n.distanceKm) : 0.0;
-    final r = Tokens.distanceRadiusBase + km * Tokens.distanceRadiusPerKm;
-    return math.min(_maxDistanceRadius, r);
+  double _bandRadius(SimNode n) =>
+      Tokens.bandRings[Tokens.distanceBand(_km(n))];
+
+  static Offset _ringPoint(Offset centre, double radius, double angle) =>
+      centre + Offset(math.cos(angle) * radius, math.sin(angle) * radius);
+
+  static int _byRing(SimNode a, SimNode b) {
+    final ka = _ringIndex(a.context);
+    final kb = _ringIndex(b.context);
+    return ka != kb ? ka.compareTo(kb) : a.id.compareTo(b.id);
   }
+
+  static int _ringIndex(String? context) {
+    final i = _ringOrder.indexOf(context ?? '');
+    return i < 0 ? _ringOrder.length : i;
+  }
+
+  static int _nearRank(String id) =>
+      id.isEmpty ? 0 : (id.codeUnitAt(0) * 7 + id.length * 13) % 97;
+
+  static double _km(SimNode n) =>
+      n.distanceKm.isFinite ? math.max(0.0, n.distanceKm) : 0.0;
 
   Offset _initialPos(int index) {
     final a = index * _spiralAngleStep;

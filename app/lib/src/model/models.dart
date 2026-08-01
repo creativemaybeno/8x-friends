@@ -11,13 +11,14 @@ abstract final class Contexts {
 
   static const all = [family, climb, work, uni, hood];
 
+  /// Lowercase: the machine voice never shouts in the paper build.
   static String label(String? context) => switch (context) {
-    family => 'FAMILY',
-    climb => 'CLIMBING',
-    work => 'WORK',
-    uni => 'UNIVERSITY',
-    hood => 'NEIGHBOURHOOD',
-    _ => 'CIRCLE',
+    family => 'family',
+    climb => 'climbing',
+    work => 'work',
+    uni => 'university',
+    hood => 'neighbourhood',
+    _ => 'circle',
   };
 }
 
@@ -27,8 +28,8 @@ enum Who { calvin, yassie }
 extension WhoX on Who {
   /// The `Person.id` in the shared cast that *is* this account.
   String get personId => switch (this) {
-    Who.calvin => 'calvin',
-    Who.yassie => 'yassie',
+    Who.calvin => 'cal',
+    Who.yassie => 'yas',
   };
 
   String get label => switch (this) {
@@ -52,6 +53,9 @@ enum AppMode {
   connect,
   confirm,
   log,
+
+  /// The permission that guards the nearby view. Asked once, never assumed.
+  nearby,
 }
 
 /// The two graph readings.
@@ -108,11 +112,39 @@ class Relationship {
     required this.id,
     required this.aPersonId,
     required this.bPersonId,
+    this.cadenceDays = 30,
+    this.seedDaysSince = 30,
+    this.via,
   });
 
   final String id;
   final String aPersonId;
   final String bPersonId;
+
+  /// The median gap between this pair's meet-ups, in days. This is what makes
+  /// four months mean something different for a weekly friend than for a
+  /// twice-a-year one.
+  final int cadenceDays;
+
+  /// Days since they last met, at boot. A logged meet-up overrides it.
+  final int seedDaysSince;
+
+  /// How the two of them know each other, in the owner's words.
+  final String? via;
+
+  /// `cadence x 6`, clamped to [60, 900]. Past this a tie reads as gone.
+  double get horizonDays => (cadenceDays * 6).clamp(60, 900).toDouble();
+
+  /// "about weekly" / "about monthly" — how often this pair normally meets.
+  String get rhythmLabel {
+    final d = cadenceDays;
+    if (d <= 9) return 'about weekly';
+    if (d <= 17) return 'every couple of weeks';
+    if (d <= 38) return 'about monthly';
+    if (d <= 75) return 'every couple of months';
+    if (d <= 130) return 'a few times a year';
+    return 'once or twice a year';
+  }
 
   static String keyFor(String a, String b) =>
       a.compareTo(b) < 0 ? '$a|$b' : '$b|$a';

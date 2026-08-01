@@ -1,4 +1,5 @@
 /// The invitation as it lands on the other phone: who, when, and one tap yes.
+/// Screen S06.
 library;
 
 import 'package:flutter/material.dart';
@@ -8,16 +9,6 @@ import '../../model/models.dart';
 import '../../state/app_state.dart';
 import '../../theme/tokens.dart';
 import 'sheet_scaffold.dart';
-
-/// Geometry only this sheet needs.
-const double _hostAvatarSize = 56.0;
-const double _guestAvatarSize = 26.0;
-const double _statGap = 10.0;
-const double _nameGap = 3.0;
-const EdgeInsets _guestPadding = EdgeInsets.fromLTRB(4, 4, Tokens.gapS, 4);
-
-/// Below this, "it has been N days" is not the story worth telling.
-const double _recentDays = 7.0;
 
 /// A day is only named by its weekday while it is still this week-ish.
 const int _weekdayHorizon = 6;
@@ -86,11 +77,10 @@ String _clockLabel(DateTime when) {
   return '$hour$minute $suffix';
 }
 
-/// One warm line about the gap this invitation is trying to close.
-String _subtitleFor(String hostName, double days) => days < _recentDays
-    ? 'You saw each other recently. $hostName wants another.'
-    : 'It has been ${durationLabel(days)} since you two were in the '
-          'same room.';
+/// `19:00`. The sheet's own headline is written the way the plan was set.
+String _clock24(DateTime when) =>
+    '${when.hour.toString().padLeft(2, '0')}:'
+    '${when.minute.toString().padLeft(2, '0')}';
 
 /// What Yassie sees when Calvin's invitation arrives: accept, or offer a
 /// different time. Nothing else — an invitation is not a negotiation.
@@ -104,134 +94,49 @@ class InvitationSheet extends StatelessWidget {
     final host = plan == null ? null : state.personById(plan.hostPersonId);
     if (plan == null || host == null) return const _NoInvitation();
 
-    final key = Relationship.keyFor(state.meId, host.id);
-    final days = state.decay.linkDays[key] ?? state.decay.daysOf(host.id);
-    final others = <Person>[
+    final days = state.daysWith(host.id);
+    final never = days >= kNeverMetDays;
+    final weekday = _weekdayNames[(plan.when.weekday - 1) % 7];
+    final place = plan.place;
+    final names = [
       for (final id in plan.attendeeIds)
-        if (id != state.meId && id != host.id) ?state.personById(id),
+        if (id != state.meId) state.personById(id)?.name ?? 'Someone',
     ];
 
     return SheetScaffold(
-      label: 'INVITATION',
-      title: '${host.name} wants to see you',
-      subtitle: _subtitleFor(host.name, days),
-      accent: Tokens.violet,
-      onClose: state.goHome,
-      footer: Row(
-        children: [
-          Expanded(
-            child: SheetButton(
-              label: 'ACCEPT',
-              accent: Tokens.violet,
-              onTap: state.acceptPlan,
-            ),
-          ),
-          const SizedBox(width: _statGap),
-          Expanded(
-            child: SheetGhostButton(
-              label: 'ANOTHER TIME',
-              onTap: () => state.setMode(AppMode.proposeTime),
-            ),
-          ),
-        ],
+      label: 'invitation',
+      labelColor: Tokens.ink2,
+      labelMark: Tokens.lime,
+      labelRight: never
+          ? 'from ${host.name.toLowerCase()}'
+          : '${durationLabel(days)} since you met',
+      subject: SheetSubject(
+        initial: host.initial,
+        name: host.name,
+        meta:
+            '${Contexts.label(host.context)} · '
+            'last together ${agoLabel(days)}',
+        badgeDecay: state.decayWith(host.id),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Avatar(person: host, size: _hostAvatarSize),
-              const SizedBox(width: Tokens.gapM),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      host.name,
-                      style: Tokens.personNameLarge,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: _nameGap),
-                    Text(Contexts.label(host.context), style: Tokens.monoLabel),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: Tokens.gapM),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: SheetStat(
-                  caption: 'WHEN',
-                  value: humanWhen(plan.when, now: state.now),
-                  accent: Tokens.violet,
-                ),
-              ),
-              const SizedBox(width: _statGap),
-              Expanded(
-                child: SheetStat(caption: 'WHERE', value: plan.place ?? '—'),
-              ),
-            ],
-          ),
-          const SizedBox(height: _statGap),
-          SheetStat(
-            caption: 'LAST TOGETHER',
-            value: agoLabel(days),
-            accent: Tokens.healthColor(decayFor(days)),
-          ),
-          if (others.isNotEmpty) ...[
-            const SizedBox(height: Tokens.gapM),
-            Text('ALSO COMING', style: Tokens.monoLabelDim),
-            const SizedBox(height: Tokens.gapS),
-            Wrap(
-              spacing: Tokens.gapS,
-              runSpacing: Tokens.gapS,
-              children: [
-                for (final p in others)
-                  _Guest(
-                    person: p,
-                    pending: state.attendanceOf(p.id) == Attendance.invited,
-                  ),
-              ],
-            ),
-          ],
-        ],
+      title: place == null
+          ? '$weekday, ${_clock24(plan.when)}'
+          : '$weekday, ${_clock24(plan.when)} — $place',
+      read:
+          'It has been a while since ${host.name}. One evening would fix '
+          'the whole thread.',
+      field: SheetField(
+        label: 'who is coming',
+        value: names.isEmpty ? 'just you' : '${names.join(', ')}, you',
       ),
-    );
-  }
-}
-
-/// Someone else who is coming. Dimmed until they say yes.
-class _Guest extends StatelessWidget {
-  const _Guest({required this.person, required this.pending});
-
-  final Person person;
-  final bool pending;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: _guestPadding,
-      decoration: BoxDecoration(
-        border: Border.all(color: Tokens.borderColor, width: Tokens.hairline),
-        borderRadius: BorderRadius.circular(Tokens.radiusChip),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Avatar(person: person, size: _guestAvatarSize, dimmed: pending),
-          const SizedBox(width: Tokens.gapXs),
-          Text(person.name, style: Tokens.personName),
-          if (pending) ...[
-            const SizedBox(width: Tokens.gapXs),
-            Text('WAITING', style: Tokens.monoLabelDim),
-          ],
-        ],
-      ),
+      actions: [
+        SheetAction(label: 'I’m in', onTap: state.acceptPlan),
+        SheetAction(
+          label: 'Another time',
+          kind: SheetActionKind.ghost,
+          onTap: () => state.setMode(AppMode.proposeTime),
+        ),
+      ],
+      foot: 'declining is fine — it just goes quiet',
     );
   }
 }
@@ -245,17 +150,19 @@ class _NoInvitation extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     return SheetScaffold(
-      label: 'INVITATION',
+      label: 'invitation',
+      labelColor: Tokens.ink2,
+      labelMark: Tokens.mut,
+      labelRight: 'nothing waiting',
       title: 'Nothing waiting',
-      subtitle: 'That invitation is no longer on the table.',
-      accent: Tokens.violet,
-      onClose: state.goHome,
-      footer: SheetButton(
-        label: 'BACK TO THE GRAPH',
-        accent: Tokens.violet,
-        onTap: state.goHome,
-      ),
-      child: Text('NO OPEN INVITATION', style: Tokens.monoLabelDim),
+      read: 'That invitation is no longer on the table.',
+      actions: [
+        SheetAction(
+          label: 'Back to the graph',
+          kind: SheetActionKind.ghost,
+          onTap: state.goHome,
+        ),
+      ],
     );
   }
 }
