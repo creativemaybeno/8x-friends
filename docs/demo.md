@@ -112,7 +112,7 @@ Do all of this **before** you are on stage. Not from the podium.
    A cold cache on venue Wi-Fi means the whole app renders in fallback fonts and
    looks wrong. This is the single most likely visible failure.
 2. **Check `app/dart_define.json` points at the live project** —
-   `https://udnspozrpyezkuprpbzm.supabase.co` and an `sb_publishable_` key.
+   `https://<your-project-ref>.supabase.co` and an `sb_publishable_` key.
    The file is gitignored, so a fresh checkout has no backend and boots to an
    amber error line.
 3. **Smoke-test the backend:** anonymous signup must return an access token

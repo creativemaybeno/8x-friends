@@ -16,10 +16,14 @@ String _date(DateTime d) =>
     '${d.day.toString().padLeft(2, '0')}';
 
 class SupabaseGraphRepository implements GraphRepository {
-  SupabaseGraphRepository([SupabaseClient? client])
-    : _c = client ?? Supabase.instance.client;
+  SupabaseGraphRepository([SupabaseClient? client]) : _injected = client;
 
-  final SupabaseClient _c;
+  final SupabaseClient? _injected;
+
+  /// Resolved lazily, never in the constructor: the repository is built during
+  /// `initState`, but `Supabase.initialize` only completes a frame or two
+  /// later. Touching `Supabase.instance` eagerly asserts.
+  SupabaseClient get _c => _injected ?? Supabase.instance.client;
 
   String? _profileId;
   final Map<String, String> _friendNames = {};

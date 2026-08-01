@@ -45,7 +45,7 @@ make cloud-run         # flutter run --dart-define-from-file=dart_define.json
 `supabase config push` exists in CLI 2.109.1 and **does** apply
 `[auth] enable_anonymous_sign_ins = true` from `supabase/config.toml`.
 
-**Verified end to end** against project `udnspozrpyezkuprpbzm` on 2026-08-01:
+**Verified end to end** against a live free-tier project on 2026-08-01:
 after `supabase config push`, an anonymous signup returns an access token:
 
 ```sh
