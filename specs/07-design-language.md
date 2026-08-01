@@ -106,8 +106,8 @@ screen. If a change cannot be expressed as a force, it does not belong.
 ## Device frame
 
 Phone only. `402 × 874` — an iPhone-class frame in dark mode, with dynamic
-island, status bar and home indicator, rendered by `design/files/ios-frame.jsx`
-(a reusable iOS 26 "Liquid Glass" component). **[built]**
+island, status bar and home indicator, rendered by `ios-frame.jsx` in the
+Claude Design project (a reusable iOS 26 "Liquid Glass" component). **[built]**
 
 Layout inside the frame: chrome overlays float above the graph, which fills the
 whole surface; everything else arrives as a bottom sheet at `translateY(112%)`

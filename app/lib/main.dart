@@ -39,8 +39,8 @@ class EightXFriendsApp extends StatelessWidget {
   }
 }
 
-/// Placeholder home. Replace with the real shell once the v2 designs in
-/// `design/files/` are being built out.
+/// Placeholder home. Replace with the real shell once the v2 designs in the
+/// Claude Design project are being built out.
 class StartupScreen extends StatelessWidget {
   const StartupScreen({super.key});
 

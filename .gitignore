@@ -2,9 +2,9 @@
 # 8x-hack monorepo — root ignore rules
 #
 # Sub-packages carry their own .gitignore (app/, app/android/, app/ios/,
-# supabase/). This file covers cross-cutting noise plus everything the design
-# sync produces locally. Overlap with the nested files is deliberate: the repo
-# stays safe even if a generated .gitignore is regenerated or deleted.
+# supabase/). This file covers cross-cutting noise. Overlap with the nested
+# files is deliberate: the repo stays safe even if a generated .gitignore is
+# regenerated or deleted.
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Secrets & local environment ──────────────────────────────────────────────
@@ -22,13 +22,6 @@ secrets/
 *.jks
 *.keystore
 key.properties
-
-# ── Design sync working state ────────────────────────────────────────────────
-# Per-Claude-Design-project etags/hashes. Local by definition: each of us
-# pushes to a *different* project, so these must never be shared.
-design/.sync/
-# Raw entity-escaped payloads staged mid-pull, before decode + size check.
-design/.staging/
 
 # ── macOS ────────────────────────────────────────────────────────────────────
 .DS_Store

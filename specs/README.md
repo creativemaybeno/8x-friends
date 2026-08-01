@@ -35,14 +35,13 @@ something as decided:**
 
 ## Iterating on these
 
-The specs are the product's source of truth; `design/files/` is the visual
-source of truth. They are separate on purpose — a design can be re-rendered, a
-decision cannot.
+The specs are the product's source of truth; the Claude Design project is the
+visual source of truth. They are separate on purpose — a design can be
+re-rendered, a decision cannot.
 
 - Edit these files directly and commit. They are plain Markdown, no tooling.
-- When a change lands here that the designs should reflect, say so in the
-  Claude Design chat and re-run `/design:pull` afterwards
-  (see [design/README.md](../design/README.md)).
+- When a change lands here that the designs should reflect, make it in the
+  Claude Design project directly.
 - When you change something tagged **[brief]** or **[design]**, retag it —
   a spec whose provenance has gone stale is worse than one with none.
 - New decisions that were never in the design project get no tag; they are

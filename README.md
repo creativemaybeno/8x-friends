@@ -1,17 +1,14 @@
 # 8x Friends
 
-Hackathon monorepo: **an offline-first social app**. Flutter client, Supabase
-backend, and the Claude Design source files all live here together.
+Hackathon monorepo: **an offline-first social app**. Flutter client and Supabase
+backend. The designs live in Claude Design, not in this repo.
 
 ```
 8x-hack/
 ├── specs/               what we're building and why       → specs/README.md
-├── design/              Claude Design files, mirrored into Git  → design/README.md
 ├── app/                 Flutter client (iOS + Android)
 ├── supabase/            Postgres migrations, edge functions, local stack config
-├── tools/design/        the sync engine behind the /design:* commands
 ├── docs/                working notes
-├── .claude/commands/    slash commands shared by everyone working in this repo
 └── Makefile             make help
 ```
 
@@ -30,41 +27,27 @@ make db-start             # local Supabase (needs Docker)
 make app-run
 ```
 
-Then, once per person, in Claude Code:
+## Designs
 
-```
-/design:bootstrap         # creates *your* Claude Design project and seeds it
-```
+Both of us work from one shared Claude account, so the Claude Design project is
+the single source of truth for designs — read and edit them there directly.
+Nothing is mirrored into Git.
 
-## Working together
+**[8x Friends: Offline Facebook](https://claude.ai/design/p/9783b908-0e28-4a55-89fe-70bd0b95a59e)**
 
-We are two people on two personal Claude subscriptions, which means two separate
-organisations — so a Claude Design project **cannot** be shared between us. Git is.
-
-- Each of us owns a private Claude Design project holding the same files.
-- `design/files/` in this repo is the source of truth joining them.
-- `/design:pull` brings your Claude Design edits into Git; `/design:push` sends
-  Git's version into your Claude Design project.
-
-Full model, conflict handling and caveats: **[design/README.md](design/README.md)**.
+Same account means the same project: **claim a design file in chat before you
+edit it**, or you will overwrite each other.
 
 ### Branches
 
-| Work        | Branch                            | Why                                                          |
-| ----------- | --------------------------------- | ------------------------------------------------------------ |
-| **Designs** | straight to `main`, small commits | Both of us need them immediately; they never touch app code.  |
-| **Code**    | `feat/<thing>` → PR → `main`      | Normal review flow; long-lived branches are fine.             |
-
-Design commits and code commits touch disjoint directories, so a code branch can
-sit open for a day and still rebase onto design commits cleanly. The reverse is
-not true *within* `design/files/`: those files do not merge (see design/README.md),
-so **claim a design file in chat before you edit it.**
+Code goes on `feat/<thing>` branches via PR into `main`. Designs are not in Git
+at all, so they never collide with a code branch.
 
 ## Commands
 
 ```
 make help                 # all targets
-make check                # analyze + test + design doctor (no Docker needed)
+make check                # analyze + test (no Docker needed)
 ```
 
 | Task                       | Command                          |
@@ -75,7 +58,6 @@ make check                # analyze + test + design doctor (no Docker needed)
 | Start / stop local DB      | `make db-start` / `make db-stop` |
 | New migration from changes | `make db-diff NAME=add_posts`    |
 | Reset DB to migrations     | `make db-reset`                  |
-| Design sync health         | `make design-doctor`             |
 
 ## Configuration & secrets
 
@@ -88,16 +70,12 @@ secrets.
 ## Git LFS
 
 Configured in `.gitattributes`, initialised by `make setup`. Large binaries
-(video, audio, fonts, `.psd`/`.sketch`/`.fig`, archives, app bundles) and raster
-images under `design/`, `app/assets/` and `docs/assets/` go to LFS.
+(video, audio, fonts, archives, app bundles) and raster images under
+`app/assets/` and `docs/assets/` go to LFS.
 
-Two deliberate exceptions:
-
-- Platform launcher icons under `app/ios/` and `app/android/` stay ordinary Git
-  blobs, so a clone on a machine without `git-lfs` still builds.
-- Design `.dc.html` files stay out of LFS — they are text and we want them
-  diffable. They are marked `-text` so Git never rewrites a byte, which is what
-  keeps the sync's size verification meaningful.
+One deliberate exception: platform launcher icons under `app/ios/` and
+`app/android/` stay ordinary Git blobs, so a clone on a machine without
+`git-lfs` still builds.
 
 ## Stack
 
