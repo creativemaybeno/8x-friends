@@ -1,6 +1,6 @@
 # 8x-hack — common tasks. Run from the repo root.
 .DEFAULT_GOAL := help
-.PHONY: help setup app-run app-test app-fix db-start db-stop db-reset db-diff db-types check clean
+.PHONY: help setup app-run app-test app-fix db-start db-stop db-reset db-diff db-types check clean cloud-up cloud-run
 
 help: ## Show this help
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) | awk -F':.*?## ' '{printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}'
@@ -42,3 +42,9 @@ check: app-test ## Analyze + test (no Docker needed)
 
 clean: ## Remove build output
 	cd app && flutter clean
+
+cloud-up: ## Create/link the remote Supabase project, push schema, write app/dart_define.json
+	./scripts/cloud-up.sh
+
+cloud-run: ## Run the Flutter app against the cloud project
+	cd app && flutter run --dart-define-from-file=dart_define.json

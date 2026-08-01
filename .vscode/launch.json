@@ -1,0 +1,46 @@
+{
+  // Credentials are NOT in this file. They live in app/dart_define.json, which
+  // is gitignored — this only points at it. Copy app/dart_define.example.json
+  // to app/dart_define.json and fill it in once; every config below picks it up.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug app",
+      "type": "dart",
+      "request": "launch",
+      "program": "app/lib/main.dart",
+      "toolArgs": [
+        "--dart-define-from-file=${workspaceFolder}/app/dart_define.json"
+      ]
+    },
+    {
+      "name": "Profile app",
+      "type": "dart",
+      "request": "launch",
+      "flutterMode": "profile",
+      "program": "app/lib/main.dart",
+      "toolArgs": [
+        "--dart-define-from-file=${workspaceFolder}/app/dart_define.json"
+      ]
+    },
+    {
+      "name": "Release app",
+      "type": "dart",
+      "request": "launch",
+      "flutterMode": "release",
+      "program": "app/lib/main.dart",
+      "toolArgs": [
+        "--dart-define-from-file=${workspaceFolder}/app/dart_define.json"
+      ]
+    },
+    {
+      "name": "P0 loop check (integration test, live backend)",
+      "type": "dart",
+      "request": "launch",
+      "program": "app/integration_test/p0_loop_test.dart",
+      "toolArgs": [
+        "--dart-define-from-file=${workspaceFolder}/app/dart_define.json"
+      ]
+    }
+  ]
+}

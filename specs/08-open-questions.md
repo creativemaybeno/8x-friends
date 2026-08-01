@@ -4,6 +4,8 @@
 
 These were put to the user in both v1 and v2 and never answered. **[open]**
 
+**[updated]**: manual answers inserted after
+
 1. **Should decay speed be per-person** — you see your sister weekly, a uni
    friend twice a year — **rather than one global horizon?**
 
@@ -14,11 +16,18 @@ These were put to the user in both v1 and v2 and never answered. **[open]**
    observed history, or let the user set "I want to see this person every ~N
    weeks".
 
+   Answer: this should be solved algorithmically, where the app automatically detects
+   how often you are seeing this person based on your shared history and behavior.
+   If this person has a connection to a connection of you who you see very often, you
+   are more likely to see that other person often too, and so on.
+
 2. **Does the group assembler need a "when"** — pulling in calendar free time —
    **or stay a pure graph suggestion?**
 
    Currently it names five people and stops. Adding time turns it into a
    scheduling product with all the integration weight that implies.
+
+   Answer: stay with pure graph suggestions.
 
 3. **Onboarding: import contacts, or is hand-entering the first 20 people part of
    the ritual?**
@@ -30,14 +39,21 @@ These were put to the user in both v1 and v2 and never answered. **[open]**
 4. **Both-sides-pay?** The design proposed that only the sender pays and offered
    to show a variant where both do. Not built.
 
+   Answer: only the sender / person who invites pays, as in assembling a group is
+   a premium feature. But don't bake this in hard. This is still up for decision.
+
 ## Decided by the design, never confirmed by you
 
 Standing because nobody objected, not because anyone agreed. **[design]**
 
 - **€4/month** for 8x Live. The prompt said "a subscription", never a price.
+  - Answer: suggestion is good for now.
 - **"Memory is free, motion costs"** as the free/paid boundary.
+  - Answer: Stale is free, live costs.
 - **Answering an invitation is free.**
+  - Answer: yes.
 - **Amber as the sole warm colour**, reserved for decay.
+  - Answer: the design is still up to change entirely. Write the code so the design can be easily changed. And I mean _everything_ can be changed from the ground up when it comes to the design. Focus on getting the functionality (graphs, relations, etc.) correct and do not bake the design into the code decisions.
 
 ## Never raised anywhere
 
@@ -47,15 +63,19 @@ Implied by the product but absent from every source. **[inferred]**
 
 - **Accounts and auth.** v2 assumes "friends who also use the app" with no
   sign-up, login, or friend-discovery flow.
+  - Answer: We go for anonymous auth because that is all we need. You get assigned an anonymous account when you first open the app and must enter your name.
 - **Consent for graph merging.** Is it symmetric? Revocable? Does the other
   person know? Does their data leave their account, or does the server return
   only counts? The whole premise is a private record of real relationships, so
   this is the most expensive thing to get wrong.
+  - Answer: Keep any connections that are not shared anonymous (do not show a name / just a ghost). For shared connections, show their real name. The way to make it work is to connect account IDs to everyone you are connected to and only share those. If you are not connected to another account ID, you do not see their name. That's it. This makes it only semi private because you can make conclusions based on anonymous connections too. But that's okay. This is a hackathon project only.
 - **Invitation delivery** outside the app, for people not currently looking at
   their graph.
+  - Answer: we do app-only for now to keep it doable for the presentation.
 - **What "offline" means technically.** The name says offline; the product is a
   network app. Is the graph usable on a plane? What syncs, and what happens on
   conflict?
+  - Answer: Offline means there is no ads and no content in the app, you do not have a feed. It's just about the real-life connections.
 
 ### Product shape
 
