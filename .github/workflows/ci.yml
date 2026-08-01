@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: Flutter
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.4
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format --set-exit-if-changed .
+      - run: flutter analyze
+      - run: flutter test
+
+  repo:
+    name: Repo hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Not --strict: CI has no git identity and no target.local.json, so no
+      # Claude Design project resolves here. That is expected, not a failure.
+      - name: Validate design sync configuration
+        run: node tools/design/sync.mjs doctor
+
+      - name: Show design mirror manifest
+        run: node tools/design/sync.mjs manifest
+
+      - name: LFS pointers resolve
+        run: |
+          git lfs ls-files
+          # A pointer file that never got fetched is 130-ish bytes of text
+          # starting with the LFS spec URL. Catch that before it reaches a clone.
+          if git grep -lI 'https://git-lfs.github.com/spec/v1' -- ':!.gitattributes' ':!*.md'; then
+            echo "::error::Unresolved Git LFS pointer committed as file content"
+            exit 1
+          fi
+
+      - name: Supabase migration filenames
+        run: |
+          shopt -s nullglob
+          bad=0
+          for f in supabase/migrations/*.sql; do
+            base=$(basename "$f")
+            # supabase CLI convention: <14-digit UTC timestamp>_<name>.sql
+            if [[ ! $base =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]]; then
+              echo "::error file=$f::Migration must be named <YYYYMMDDHHMMSS>_<snake_case>.sql"
+              bad=1
+            fi
+          done
+          exit $bad
+
+      - name: No secrets committed
+        run: |
+          if git ls-files | grep -E '(^|/)(\.env(\..*)?|.*\.local\.json|.*\.(jks|keystore|p8|p12|pem)|dart_define\.json)$' \
+             | grep -v -E '\.example\.json$'; then
+            echo "::error::A file matching a secret pattern is tracked by Git"
+            exit 1
+          fi

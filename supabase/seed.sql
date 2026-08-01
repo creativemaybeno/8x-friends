@@ -1,0 +1,2 @@
+-- Seed data for the local stack. Applied by `supabase db reset`.
+-- Keep this idempotent: it runs on every reset, and we reset often.

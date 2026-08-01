@@ -1,0 +1,8 @@
+{
+  "_readme": "Copy to app/dart_define.json (gitignored) and fill in. Then: flutter run --dart-define-from-file=dart_define.json",
+  "_local": "For the local stack, run `supabase start` from the repo root and paste the API URL + publishable/anon key it prints. On a simulator use http://127.0.0.1:54321; on a physical device use your machine's LAN IP.",
+  "_hosted": "For the hosted project: Supabase dashboard -> Project Settings -> API keys.",
+  "_keys": "SUPABASE_ANON_KEY is the legacy name and still works; newer CLI versions print SUPABASE_PUBLISHABLE_KEY instead. Set whichever your CLI gives you — the app accepts both.",
+  "SUPABASE_URL": "http://127.0.0.1:54321",
+  "SUPABASE_PUBLISHABLE_KEY": "paste-the-publishable-or-anon-key-here"
+}

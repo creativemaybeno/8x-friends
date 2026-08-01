@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"><style>
+html,body{margin:0;padding:0;background:#04070a;color:#cfe9f2;font-family:'Chakra Petch',system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#7de7f7;text-decoration:none}a:hover{color:#bff4ff}
+*{box-sizing:border-box}
+@keyframes scan{0%{transform:translateY(-100%)}100%{transform:translateY(900%)}}
+@keyframes bootpulse{0%,100%{opacity:.35}50%{opacity:1}}
+@keyframes flicker{0%,100%{opacity:.9}47%{opacity:.55}52%{opacity:1}}
+</style></helmet>
+
+<div style="min-height:100vh;background:radial-gradient(1200px 700px at 22% -10%, #0a1a22 0%, #04070a 62%);padding:44px 26px 80px;display:flex;gap:40px;align-items:flex-start;justify-content:center;flex-wrap:wrap">
+
+<div style="display:flex;flex-direction:column;gap:16px;align-items:center">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ yes }}" hint-size="402px,874px">
+<div style="position:relative;height:100%;width:100%;overflow:hidden;background:#04070a;font-family:'Chakra Petch',sans-serif;color:#d6eef5;user-select:none;-webkit-user-select:none">
+
+<div id="gx8-host" ref="{{ hostRef }}" style="position:absolute;inset:0;touch-action:none;cursor:grab"></div>
+
+<div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 70% at 50% 42%, rgba(0,0,0,0) 40%, rgba(2,5,8,.82) 100%)"></div>
+<div style="position:absolute;left:0;right:0;top:0;height:2px;background:linear-gradient(90deg,transparent,rgba(125,231,247,.5),transparent);pointer-events:none;animation:scan 9s linear infinite;opacity:.4"></div>
+
+<div style="position:absolute;left:0;right:0;top:0;padding:60px 18px 12px;display:flex;align-items:center;justify-content:space-between;pointer-events:none;background:linear-gradient(#04070aee,#04070a00);transition:opacity .7s ease;opacity:{{ chromeOp }}">
+  <div style="display:flex;align-items:baseline;gap:7px">
+    <span style="font-size:19px;font-weight:700;letter-spacing:.02em;color:#7de7f7;text-shadow:0 0 14px rgba(125,231,247,.55)">8x</span>
+    <span style="font-size:11px;font-weight:400;letter-spacing:.34em;text-transform:uppercase;color:#5c8896">friends</span>
+  </div>
+  <div style="display:flex;gap:4px;pointer-events:auto;padding:3px;border-radius:9px;background:rgba(10,22,28,.72);box-shadow:inset 0 0 0 1px rgba(125,231,247,.14)">
+    <div onClick="{{ setWeb }}" style="padding:5px 9px;border-radius:6px;font-size:9.5px;font-weight:600;letter-spacing:.18em;cursor:pointer;transition:all .3s;color:#d9f6fd;background:{{ bgWeb }};opacity:{{ opWeb }}">WEB</div>
+    <div onClick="{{ setOrbit }}" style="padding:5px 9px;border-radius:6px;font-size:9.5px;font-weight:600;letter-spacing:.18em;cursor:pointer;transition:all .3s;color:#d9f6fd;background:{{ bgOrbit }};opacity:{{ opOrbit }}">ORBIT</div>
+    <div onClick="{{ setStrata }}" style="padding:5px 9px;border-radius:6px;font-size:9.5px;font-weight:600;letter-spacing:.18em;cursor:pointer;transition:all .3s;color:#d9f6fd;background:{{ bgStrata }};opacity:{{ opStrata }}">STRATA</div>
+  </div>
+</div>
+
+<div style="position:absolute;left:18px;top:112px;pointer-events:none;transition:opacity .5s;opacity:{{ hintOp }}">
+  <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.1em;color:#4e7684;line-height:1.9">{{ hintLine1 }}<br />{{ hintLine2 }}</div>
+</div>
+
+<div style="position:absolute;right:16px;top:112px;display:flex;flex-direction:column;gap:7px;transition:opacity .5s;opacity:{{ chromeOp }}">
+  <div onClick="{{ zoomIn }}" style="width:30px;height:30px;border-radius:8px;background:rgba(10,22,28,.72);box-shadow:inset 0 0 0 1px rgba(125,231,247,.14);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;font-weight:300;color:#8fc4d2">+</div>
+  <div onClick="{{ zoomOut }}" style="width:30px;height:30px;border-radius:8px;background:rgba(10,22,28,.72);box-shadow:inset 0 0 0 1px rgba(125,231,247,.14);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:15px;font-weight:300;color:#8fc4d2">−</div>
+  <div onClick="{{ recenter }}" style="width:30px;height:30px;border-radius:8px;background:rgba(10,22,28,.72);box-shadow:inset 0 0 0 1px rgba(125,231,247,.14);display:flex;align-items:center;justify-content:center;cursor:pointer" title="recenter">
+    <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="2" fill="#8fc4d2" /><circle cx="6" cy="6" r="5" fill="none" stroke="#8fc4d2" stroke-width="1" stroke-dasharray="2 2.6" /></svg>
+  </div>
+</div>
+
+<div style="position:absolute;left:14px;right:14px;bottom:0;padding-bottom:26px;pointer-events:none;transition:opacity .5s;opacity:{{ chromeOp }}">
+  <div style="display:flex;gap:6px;padding:7px;border-radius:17px;background:rgba(7,16,21,.86);backdrop-filter:blur(14px);box-shadow:inset 0 0 0 1px rgba(125,231,247,.15),0 -14px 40px rgba(0,0,0,.7);pointer-events:auto">
+    <div onClick="{{ goHome }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0 7px;border-radius:12px;cursor:pointer;transition:background .3s;background:{{ navHome }}">
+      <svg width="18" height="18" viewBox="0 0 18 18" style="opacity:{{ opHome }}"><line x1="9" y1="9" x2="4" y2="4.5" stroke="#7de7f7" stroke-width="1" /><line x1="9" y1="9" x2="14.5" y2="6" stroke="#7de7f7" stroke-width="1" /><line x1="9" y1="9" x2="6.5" y2="14.5" stroke="#7de7f7" stroke-width="1" /><circle cx="9" cy="9" r="2.6" fill="#7de7f7" /><circle cx="4" cy="4.5" r="1.7" fill="none" stroke="#7de7f7" stroke-width="1" /><circle cx="14.5" cy="6" r="1.7" fill="none" stroke="#7de7f7" stroke-width="1" /><circle cx="6.5" cy="14.5" r="1.7" fill="none" stroke="#7de7f7" stroke-width="1" /></svg>
+      <span style="font-size:8px;letter-spacing:.16em;font-weight:500;color:#9fd5e3;opacity:{{ opHome }}">GRAPH</span>
+    </div>
+    <div onClick="{{ goLog }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0 7px;border-radius:12px;cursor:pointer;transition:background .3s;background:{{ navLog }}">
+      <svg width="18" height="18" viewBox="0 0 18 18" style="opacity:{{ opLog }}"><circle cx="9" cy="9" r="7" fill="none" stroke="#7de7f7" stroke-width="1" /><line x1="9" y1="5.6" x2="9" y2="12.4" stroke="#7de7f7" stroke-width="1.4" /><line x1="5.6" y1="9" x2="12.4" y2="9" stroke="#7de7f7" stroke-width="1.4" /></svg>
+      <span style="font-size:8px;letter-spacing:.16em;font-weight:500;color:#9fd5e3;opacity:{{ opLog }}">LOG</span>
+    </div>
+    <div onClick="{{ goNudge }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0 7px;border-radius:12px;cursor:pointer;transition:background .3s;background:{{ navNudge }};position:relative">
+      <svg width="18" height="18" viewBox="0 0 18 18" style="opacity:{{ opNudge }}"><circle cx="9" cy="9" r="7" fill="none" stroke="#ffb35c" stroke-width="1" stroke-dasharray="3.4 3" /><circle cx="9" cy="9" r="2.4" fill="#ffb35c" /></svg>
+      <span style="font-size:8px;letter-spacing:.16em;font-weight:500;color:#f0c79a;opacity:{{ opNudge }}">PULL</span>
+      <div style="position:absolute;top:6px;right:19px;width:5px;height:5px;border-radius:50%;background:#ffb35c;box-shadow:0 0 8px #ffb35c;animation:bootpulse 2.2s ease-in-out infinite"></div>
+    </div>
+    <div onClick="{{ goGroup }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0 7px;border-radius:12px;cursor:pointer;transition:background .3s;background:{{ navGroup }}">
+      <svg width="18" height="18" viewBox="0 0 18 18" style="opacity:{{ opGroup }}"><polygon points="9,3.4 14.6,13.4 3.4,13.4" fill="none" stroke="#7de7f7" stroke-width="1" /><circle cx="9" cy="3.4" r="2" fill="#7de7f7" /><circle cx="14.6" cy="13.4" r="2" fill="#7de7f7" /><circle cx="3.4" cy="13.4" r="2" fill="#7de7f7" /></svg>
+      <span style="font-size:8px;letter-spacing:.16em;font-weight:500;color:#9fd5e3;opacity:{{ opGroup }}">GROUP</span>
+    </div>
+    <div onClick="{{ goTime }}" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px;padding:9px 0 7px;border-radius:12px;cursor:pointer;transition:background .3s;background:{{ navTime }}">
+      <svg width="18" height="18" viewBox="0 0 18 18" style="opacity:{{ opTime }}"><circle cx="9" cy="9" r="7" fill="none" stroke="#7de7f7" stroke-width="1" /><line x1="9" y1="9" x2="9" y2="5.2" stroke="#7de7f7" stroke-width="1.2" /><line x1="9" y1="9" x2="11.8" y2="10.6" stroke="#7de7f7" stroke-width="1.2" /></svg>
+      <span style="font-size:8px;letter-spacing:.16em;font-weight:500;color:#9fd5e3;opacity:{{ opTime }}">TIME</span>
+    </div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:0;padding:0 12px 12px;transition:transform .62s cubic-bezier(.16,1,.3,1),opacity .35s;transform:translateY({{ focusY }});opacity:{{ focusOp }};pointer-events:{{ focusPE }}">
+  <div style="border-radius:20px;background:linear-gradient(#0b1a21f2,#060f14fa);backdrop-filter:blur(18px);box-shadow:inset 0 0 0 1px rgba(125,231,247,.18),0 -20px 60px rgba(0,0,0,.8);padding:16px 18px 24px;position:relative;overflow:hidden">
+    <div style="position:absolute;left:0;top:0;height:1px;width:100%;background:linear-gradient(90deg,transparent,rgba(125,231,247,.7),transparent)"></div>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
+      <div>
+        <div style="font-size:22px;font-weight:600;letter-spacing:.01em;color:#e6f8fd;line-height:1.15">{{ fName }}</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:5px;font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:#5f93a3">
+          <span style="padding:2px 7px;border-radius:4px;background:rgba(125,231,247,.09);box-shadow:inset 0 0 0 1px rgba(125,231,247,.2)">{{ fGroup }}</span>
+          <span>{{ fVia }}</span>
+        </div>
+      </div>
+      <div onClick="{{ goHome }}" style="width:28px;height:28px;flex:none;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:inset 0 0 0 1px rgba(125,231,247,.18);color:#7fb7c7;font-size:14px;font-weight:300">×</div>
+    </div>
+
+    <div style="margin-top:15px;display:flex;gap:8px">
+      <div style="flex:1;padding:10px 11px;border-radius:12px;background:rgba(125,231,247,.05);box-shadow:inset 0 0 0 1px rgba(125,231,247,.12)">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.16em;color:#5f93a3">LAST TOGETHER</div>
+        <div style="font-size:17px;font-weight:600;color:{{ fDecayCol }};margin-top:3px">{{ fLast }}</div>
+      </div>
+      <div style="flex:1;padding:10px 11px;border-radius:12px;background:rgba(125,231,247,.05);box-shadow:inset 0 0 0 1px rgba(125,231,247,.12)">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.16em;color:#5f93a3">BIRTHDAY</div>
+        <div style="font-size:17px;font-weight:600;color:#dff4fa;margin-top:3px">{{ fBday }}</div>
+      </div>
+    </div>
+
+    <div style="margin-top:13px">
+      <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.14em;color:#5f93a3"><span>SIGNAL STRENGTH</span><span style="color:{{ fDecayCol }}">{{ fSignal }}</span></div>
+      <div style="margin-top:6px;height:3px;border-radius:2px;background:rgba(125,231,247,.1);overflow:hidden">
+        <div style="height:100%;border-radius:2px;transition:width .7s cubic-bezier(.16,1,.3,1),background .7s;width:{{ fSignalW }};background:{{ fDecayCol }};box-shadow:0 0 10px {{ fDecayCol }}"></div>
+      </div>
+      <div style="margin-top:8px;font-size:12.5px;line-height:1.45;color:#9ac6d3;text-wrap:pretty">{{ fLine }}</div>
+    </div>
+
+    <div style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px">
+      <sc-for list="{{ fCtx }}" as="c" hint-placeholder-count="3">
+        <span style="padding:4px 9px;border-radius:20px;font-size:10.5px;letter-spacing:.05em;color:#a9dbe8;background:rgba(125,231,247,.06);box-shadow:inset 0 0 0 1px rgba(125,231,247,.14)">{{ c }}</span>
+      </sc-for>
+    </div>
+
+    <div style="margin-top:16px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:8.5px;letter-spacing:.16em;color:#5f93a3;margin-bottom:8px">SHARED HISTORY</div>
+      <div style="display:flex;flex-direction:column;gap:1px;max-height:132px;overflow:auto">
+        <sc-for list="{{ fHistory }}" as="h" hint-placeholder-count="3">
+          <div style="display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px solid rgba(125,231,247,.07)">
+            <span style="font-family:'JetBrains Mono',monospace;font-size:9.5px;color:#4e7684;width:52px;flex:none">{{ h.when }}</span>
+            <span style="font-size:12.5px;color:#cfe9f2;flex:1">{{ h.place }}</span>
+            <span style="font-size:10.5px;color:#5f93a3">{{ h.who }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:8px">
+      <div onClick="{{ logWithFocus }}" style="flex:1;padding:12px;border-radius:12px;text-align:center;font-size:12.5px;font-weight:600;letter-spacing:.06em;color:#04121a;background:linear-gradient(#9defff,#4fd3ec);box-shadow:0 0 22px rgba(125,231,247,.35);cursor:pointer">WE MET UP</div>
+      <div onClick="{{ groupWithFocus }}" style="flex:1;padding:12px;border-radius:12px;text-align:center;font-size:12.5px;font-weight:600;letter-spacing:.06em;color:#a9dbe8;box-shadow:inset 0 0 0 1px rgba(125,231,247,.24);cursor:pointer">BUILD A GROUP</div>
+    </div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:0;padding:0 12px 12px;transition:transform .55s cubic-bezier(.16,1,.3,1),opacity .3s;transform:translateY({{ logY }});opacity:{{ logOp }};pointer-events:{{ logPE }}">
+  <div style="border-radius:20px;background:linear-gradient(#0b1a21f2,#060f14fa);backdrop-filter:blur(18px);box-shadow:inset 0 0 0 1px rgba(125,231,247,.2),0 -20px 60px rgba(0,0,0,.8);padding:15px 16px 22px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;color:#5f93a3">TAP EVERYONE WHO WAS THERE</div>
+      <div onClick="{{ goHome }}" style="font-size:10px;letter-spacing:.14em;color:#7fb7c7;cursor:pointer;padding:4px 6px">CANCEL</div>
+    </div>
+    <div style="margin-top:10px;font-size:19px;font-weight:600;color:#e6f8fd;line-height:1.25;min-height:26px">{{ selLine }}</div>
+    <div style="margin-top:12px;display:flex;gap:6px">
+      <sc-for list="{{ dateChips }}" as="d" hint-placeholder-count="4">
+        <div onClick="{{ d.pick }}" style="flex:1;padding:9px 4px;border-radius:11px;text-align:center;font-size:11.5px;font-weight:500;cursor:pointer;transition:all .25s;color:#cbeaf3;box-shadow:inset 0 0 0 1px rgba(125,231,247,.16);background:{{ d.bg }}">{{ d.label }}</div>
+      </sc-for>
+    </div>
+    <div onClick="{{ confirmLog }}" style="margin-top:12px;padding:14px;border-radius:13px;text-align:center;font-size:13px;font-weight:600;letter-spacing:.08em;cursor:pointer;transition:all .35s;color:#04121a;background:{{ logBtnBg }};opacity:{{ logBtnOp }};box-shadow:0 0 26px rgba(125,231,247,.3)">{{ logBtnLabel }}</div>
+    <div onClick="{{ openAdd }}" style="margin-top:9px;text-align:center;font-size:11px;letter-spacing:.1em;color:#5f93a3;cursor:pointer">+ SOMEONE NEW WAS THERE</div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:0;padding:0 12px 12px;transition:transform .55s cubic-bezier(.16,1,.3,1),opacity .3s;transform:translateY({{ nudgeY }});opacity:{{ nudgeOp }};pointer-events:{{ nudgePE }}">
+  <div style="border-radius:20px;background:linear-gradient(#1a130bf2,#0a0906fa);backdrop-filter:blur(18px);box-shadow:inset 0 0 0 1px rgba(255,179,92,.24),0 -20px 60px rgba(0,0,0,.8);padding:15px 16px 22px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;color:#b98b52">THE GRAPH IS PULLING AT YOU</div>
+      <div onClick="{{ goHome }}" style="font-size:10px;letter-spacing:.14em;color:#b98b52;cursor:pointer;padding:4px 6px">DISMISS</div>
+    </div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:7px">
+      <sc-for list="{{ nudges }}" as="n" hint-placeholder-count="3">
+        <div onClick="{{ n.tap }}" style="display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:13px;cursor:pointer;background:rgba(255,179,92,.05);box-shadow:inset 0 0 0 1px rgba(255,179,92,.16)">
+          <div style="width:34px;height:34px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;color:#ffcf9a;box-shadow:inset 0 0 0 1px rgba(255,179,92,.4);background:rgba(255,179,92,.07)">{{ n.initials }}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600;color:#ffe6c8">{{ n.name }}</div>
+            <div style="font-size:11.5px;color:#b98b52;margin-top:1px">{{ n.line }}</div>
+          </div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:15px;font-weight:400;color:#ffb35c">{{ n.days }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div onClick="{{ logNudges }}" style="margin-top:12px;padding:13px;border-radius:13px;text-align:center;font-size:12.5px;font-weight:600;letter-spacing:.07em;color:#1a1006;background:linear-gradient(#ffd6a3,#ffb35c);cursor:pointer;box-shadow:0 0 26px rgba(255,179,92,.28)">SEE THEM ALL AT ONCE</div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:0;padding:0 12px 12px;transition:transform .55s cubic-bezier(.16,1,.3,1),opacity .3s;transform:translateY({{ groupY }});opacity:{{ groupOp }};pointer-events:{{ groupPE }}">
+  <div style="border-radius:20px;background:linear-gradient(#0b1a21f2,#060f14fa);backdrop-filter:blur(18px);box-shadow:inset 0 0 0 1px rgba(125,231,247,.2),0 -20px 60px rgba(0,0,0,.8);padding:15px 16px 22px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;color:#5f93a3">ASSEMBLED FROM THE GRAPH</div>
+      <div onClick="{{ goHome }}" style="font-size:10px;letter-spacing:.14em;color:#7fb7c7;cursor:pointer;padding:4px 6px">CLOSE</div>
+    </div>
+    <div style="margin-top:10px;font-size:19px;font-weight:600;color:#e6f8fd;line-height:1.3;text-wrap:pretty">{{ groupTitle }}</div>
+    <div style="margin-top:6px;font-size:12.5px;line-height:1.5;color:#9ac6d3;text-wrap:pretty">{{ groupWhy }}</div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:5px">
+      <sc-for list="{{ groupRows }}" as="g" hint-placeholder-count="3">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:11px;background:rgba(125,231,247,.045)">
+          <div style="width:26px;height:26px;flex:none;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#bfeaf5;box-shadow:inset 0 0 0 1px rgba(125,231,247,.3)">{{ g.initials }}</div>
+          <div style="flex:1;font-size:13px;color:#dff4fa">{{ g.name }}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#5f93a3">{{ g.note }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px">
+      <div onClick="{{ reshuffle }}" style="flex:none;padding:13px 15px;border-radius:13px;font-size:12px;font-weight:600;letter-spacing:.06em;color:#a9dbe8;box-shadow:inset 0 0 0 1px rgba(125,231,247,.24);cursor:pointer">RESHUFFLE</div>
+      <div onClick="{{ confirmGroup }}" style="flex:1;padding:13px;border-radius:13px;text-align:center;font-size:12.5px;font-weight:600;letter-spacing:.07em;color:#04121a;background:linear-gradient(#9defff,#4fd3ec);cursor:pointer;box-shadow:0 0 26px rgba(125,231,247,.3)">PING THE FIVE</div>
+    </div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:0;padding:0 12px 12px;transition:transform .55s cubic-bezier(.16,1,.3,1),opacity .3s;transform:translateY({{ timeY }});opacity:{{ timeOp }};pointer-events:{{ timePE }}">
+  <div style="border-radius:20px;background:linear-gradient(#0b1a21f2,#060f14fa);backdrop-filter:blur(18px);box-shadow:inset 0 0 0 1px rgba(125,231,247,.2),0 -20px 60px rgba(0,0,0,.8);padding:15px 16px 22px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;color:#5f93a3">SCRUB THE GRAPH THROUGH TIME</div>
+      <div onClick="{{ goHome }}" style="font-size:10px;letter-spacing:.14em;color:#7fb7c7;cursor:pointer;padding:4px 6px">CLOSE</div>
+    </div>
+    <div style="margin-top:10px;display:flex;align-items:baseline;gap:10px">
+      <div style="font-size:26px;font-weight:600;color:#e6f8fd;letter-spacing:.01em">{{ scrubDate }}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#5f93a3">{{ scrubAgo }}</div>
+    </div>
+    <div id="gx8-track" ref="{{ trackRef }}" onPointerDown="{{ onScrubDown }}" style="margin-top:16px;height:36px;position:relative;cursor:ew-resize;touch-action:none">
+      <div style="position:absolute;left:0;right:0;top:17px;height:2px;background:linear-gradient(90deg,rgba(255,179,92,.35),rgba(125,231,247,.5))"></div>
+      <sc-for list="{{ ticks }}" as="tk" hint-placeholder-count="6">
+        <div style="position:absolute;top:11px;width:1px;height:14px;background:rgba(125,231,247,.28);left:{{ tk.x }}"></div>
+      </sc-for>
+      <div style="position:absolute;top:2px;width:2px;height:32px;background:#9defff;box-shadow:0 0 14px #7de7f7;transition:left .06s linear;left:{{ scrubX }}"></div>
+      <div style="position:absolute;top:8px;width:18px;height:20px;margin-left:-9px;border-radius:6px;background:#0b1a21;box-shadow:inset 0 0 0 1px rgba(125,231,247,.55),0 0 16px rgba(125,231,247,.35);transition:left .06s linear;left:{{ scrubX }}"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;color:#4e7684"><span>18 MONTHS AGO</span><span>TODAY</span></div>
+    <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+      <div onClick="{{ togglePlay }}" style="flex:none;width:46px;padding:12px 0;border-radius:12px;text-align:center;font-size:11px;font-weight:600;color:#04121a;background:linear-gradient(#9defff,#4fd3ec);cursor:pointer">{{ playLabel }}</div>
+      <div style="flex:1;font-size:12px;line-height:1.45;color:#9ac6d3;text-wrap:pretty">{{ scrubNote }}</div>
+    </div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:0;padding:0 12px 12px;transition:transform .55s cubic-bezier(.16,1,.3,1),opacity .3s;transform:translateY({{ addY }});opacity:{{ addOp }};pointer-events:{{ addPE }}">
+  <div style="border-radius:20px;background:linear-gradient(#0b1a21f2,#060f14fa);backdrop-filter:blur(18px);box-shadow:inset 0 0 0 1px rgba(125,231,247,.2),0 -20px 60px rgba(0,0,0,.8);padding:15px 16px 22px">
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.2em;color:#5f93a3">{{ addHeading }}</div>
+      <div onClick="{{ goHome }}" style="font-size:10px;letter-spacing:.14em;color:#7fb7c7;cursor:pointer;padding:4px 6px">CANCEL</div>
+    </div>
+    <input value="{{ addName }}" onChange="{{ onAddName }}" placeholder="Their name" style="margin-top:12px;width:100%;padding:13px 14px;border-radius:13px;border:0;outline:0;background:rgba(125,231,247,.06);box-shadow:inset 0 0 0 1px rgba(125,231,247,.2);color:#e6f8fd;font-family:'Chakra Petch',sans-serif;font-size:16px;font-weight:500" />
+    <div style="margin-top:11px;font-size:12.5px;line-height:1.45;color:#9ac6d3;text-wrap:pretty">{{ addHint }}</div>
+    <div onClick="{{ addNext }}" style="margin-top:12px;padding:14px;border-radius:13px;text-align:center;font-size:13px;font-weight:600;letter-spacing:.08em;cursor:pointer;transition:opacity .3s;color:#04121a;background:linear-gradient(#9defff,#4fd3ec);opacity:{{ addBtnOp }};box-shadow:0 0 26px rgba(125,231,247,.3)">{{ addBtnLabel }}</div>
+  </div>
+</div>
+
+<div style="position:absolute;left:0;right:0;bottom:118px;display:flex;justify-content:center;pointer-events:none;transition:opacity .4s,transform .4s;opacity:{{ toastOp }};transform:translateY({{ toastY }})">
+  <div style="padding:9px 15px;border-radius:11px;background:rgba(9,26,32,.94);box-shadow:inset 0 0 0 1px rgba(125,231,247,.28),0 8px 30px rgba(0,0,0,.6);font-size:12.5px;color:#c9ecf5;max-width:330px;text-align:center;text-wrap:pretty">{{ toast }}</div>
+</div>
+
+<div style="position:absolute;inset:0;background:#04070a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;transition:opacity .9s ease .2s;opacity:{{ bootOp }};pointer-events:{{ bootPE }}">
+  <div style="font-size:54px;font-weight:700;letter-spacing:.02em;color:#7de7f7;text-shadow:0 0 40px rgba(125,231,247,.6);animation:flicker 3.4s ease-in-out infinite">8x</div>
+  <div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.42em;text-transform:uppercase;color:#3f6472">assembling your graph</div>
+</div>
+
+</div>
+</x-import>
+<div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.16em;color:#3f6472;text-transform:uppercase">drag nodes · drag to pan · tap a node to focus</div>
+</div>
+
+<div style="width:400px;max-width:100%;padding-top:8px;display:flex;flex-direction:column;gap:26px">
+  <div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.24em;color:#3f6472;text-transform:uppercase">8x friends · interactive prototype</div>
+    <div style="margin-top:10px;font-size:27px;font-weight:600;line-height:1.2;color:#e6f8fd;text-wrap:pretty">The graph is the app. Every flow happens inside it.</div>
+    <div style="margin-top:12px;font-size:13.5px;line-height:1.6;color:#8fb9c6;text-wrap:pretty">No screens stacked on screens — one living force simulation that re-forms itself for each task. Focus, logging, nudges, group-building and time travel are all the same graph under different forces, so nothing ever cuts. Everything is live: drag a node and the springs answer.</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:12px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:#3f6472;text-transform:uppercase">The decay language</div>
+    <div style="display:flex;gap:12px;align-items:flex-start"><div style="width:9px;height:9px;margin-top:5px;flex:none;border-radius:50%;background:#7de7f7;box-shadow:0 0 12px #7de7f7"></div><div style="font-size:13px;line-height:1.55;color:#9ac6d3"><b style="color:#dff4fa;font-weight:600">Fresh links carry light.</b> Packets run along the edge and the node core breathes. Your eye goes to motion first.</div></div>
+    <div style="display:flex;gap:12px;align-items:flex-start"><div style="width:9px;height:9px;margin-top:5px;flex:none;border-radius:50%;background:#2b6b7c"></div><div style="font-size:13px;line-height:1.55;color:#9ac6d3"><b style="color:#dff4fa;font-weight:600">Fading links thin and dim</b> as weeks pass, and the spring lengthens — the person physically drifts away from you.</div></div>
+    <div style="display:flex;gap:12px;align-items:flex-start"><div style="width:9px;height:9px;margin-top:5px;flex:none;border-radius:50%;background:#ffb35c;box-shadow:0 0 12px rgba(255,179,92,.7)"></div><div style="font-size:13px;line-height:1.55;color:#9ac6d3"><b style="color:#dff4fa;font-weight:600">Dead links deconstruct.</b> The line breaks into drifting fragments and the countdown ring around the node empties into amber. It's the only warm colour in the app, so it's impossible to miss.</div></div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:10px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:#3f6472;text-transform:uppercase">Three directions for the home graph</div>
+    <div style="font-size:13px;line-height:1.55;color:#9ac6d3"><b style="color:#7de7f7;font-weight:600">WEB</b> — free force layout. Truest picture of who knows who; clusters emerge on their own.</div>
+    <div style="font-size:13px;line-height:1.55;color:#9ac6d3"><b style="color:#7de7f7;font-weight:600">ORBIT</b> — you at the centre, radius = time since you last met. Drifting people literally fall to the outer rings.</div>
+    <div style="font-size:13px;line-height:1.55;color:#9ac6d3"><b style="color:#7de7f7;font-weight:600">STRATA</b> — islands by shared context (family, climbing, work…). Best for spotting a group you could assemble.</div>
+    <div style="font-size:12.5px;line-height:1.5;color:#5f8b99;text-wrap:pretty">Switching re-runs the same simulation with different target forces, so the graph reassembles instead of cutting. Try it mid-drag.</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:#3f6472;text-transform:uppercase">Try this</div>
+    <div style="font-size:13px;line-height:1.6;color:#9ac6d3">1 · Tap a dim node on the edge — the graph zooms and its neighbours arrange around it.<br />2 · <b style="color:#dff4fa;font-weight:600">LOG</b> → tap three people → they huddle → confirm and watch the links re-ignite.<br />3 · <b style="color:#ffb35c;font-weight:600">PULL</b> — the three most-faded people stretch away on elastic tethers.<br />4 · <b style="color:#dff4fa;font-weight:600">TIME</b> → drag the scrubber and watch 18 months of the graph decay and refresh.</div>
+  </div>
+
+  <div style="display:flex;flex-direction:column;gap:9px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:9.5px;letter-spacing:.2em;color:#3f6472;text-transform:uppercase">Open questions for you</div>
+    <div style="font-size:13px;line-height:1.6;color:#8fb9c6;text-wrap:pretty">· Should decay speed be per-person (you see your sister weekly, a uni friend twice a year) rather than one global horizon?<br />· Does the group assembler need a "when" — pulling in calendar free time — or stay a pure graph suggestion?<br />· Onboarding: import contacts, or is hand-entering the first 20 people part of the ritual?</div>
+  </div>
+</div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;decayHorizon&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:240,&quot;min&quot;:90,&quot;max&quot;:540,&quot;step&quot;:30,&quot;unit&quot;:&quot;d&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Decay model&quot;},&quot;linkDecayStyle&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;both&quot;,&quot;options&quot;:[&quot;both&quot;,&quot;fragment&quot;,&quot;fade&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Decay model&quot;},&quot;showTrails&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;breathing&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;nodeLabels&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;smart&quot;,&quot;options&quot;:[&quot;smart&quot;,&quot;always&quot;,&quot;never&quot;],&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Motion&quot;}}">
+const NS = 'http://www.w3.org/2000/svg';
+const GROUPS = {
+  family: { label: 'Family', color: '#8FD9FF' },
+  climb:  { label: 'Climbing', color: '#6FE3F5' },
+  work:   { label: 'Work', color: '#9AA8FF' },
+  uni:    { label: 'University', color: '#7BF0C8' },
+  hood:   { label: 'Neighbourhood', color: '#C9A6FF' },
+};
+const AMBER = '#FFB35C';
+const PLACES = ['Casa Rosa','Bloc Fabrik','the Praça','Rui\u2019s kitchen','tram 28','the rooftop','Cine Nova','Sunday market','Serra trail','Bar Estrela','the allotment','Studio 4','Ana\u2019s balcony','the long table'];
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; }; }
+function lerp(a, b, t) { return a + (b - a) * t; }
+function mixHex(a, b, t) {
+  const pa = [parseInt(a.slice(1,3),16), parseInt(a.slice(3,5),16), parseInt(a.slice(5,7),16)];
+  const pb = [parseInt(b.slice(1,3),16), parseInt(b.slice(3,5),16), parseInt(b.slice(5,7),16)];
+  return '#' + pa.map((v,i) => Math.round(lerp(v, pb[i], t)).toString(16).padStart(2,'0')).join('');
+}
+
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.hostRef = React.createRef();
+    this.trackRef = React.createRef();
+    this.buildData();
+    this.cam = { x: 0, y: 0, k: 0.62, tx: 0, ty: 0, tk: 0.78 };
+    this.t0 = 0;
+    this.state = {
+      mode: 'boot', focus: null, sel: [], when: 0, scrub: 0, layout: 'web',
+      group: null, toast: null, addName: '', addStep: 0, playing: false, v: 0,
+    };
+  }
+
+  /* ---------- data ---------- */
+  buildData() {
+    const P = [
+      ['me','You','family',3,'—',null],
+      ['marta','Marta','family',3,'04 Mar','sister'],
+      ['jorge','Jorge','family',2,'19 Nov','dad'],
+      ['ines','Inês','family',2,'02 Jun','mum'],
+      ['rui','Rui','family',2,'27 Jan','cousin'],
+      ['clara','Clara','family',1,'11 Sep','Rui\u2019s partner'],
+      ['tomas','Tomás','climb',3,'08 Aug','met at Bloc Fabrik'],
+      ['sofia','Sofia','climb',3,'23 Apr','met at Bloc Fabrik'],
+      ['kaito','Kaito','climb',2,'15 Dec','via Tomás'],
+      ['nadia','Nadia','climb',2,'30 May','via Sofia'],
+      ['bruno','Bruno','climb',1,'06 Feb','via Kaito'],
+      ['priya','Priya','work',3,'12 Oct','desk neighbour'],
+      ['leo','Léo','work',2,'25 Jul','same team'],
+      ['hannah','Hannah','work',2,'03 Mar','same team'],
+      ['omar','Omar','work',1,'18 Sep','via Hannah'],
+      ['yuki','Yuki','work',1,'09 Jan','via Omar'],
+      ['ana','Ana','uni',3,'21 Jun','first year flatmate'],
+      ['daniel','Daniel','uni',2,'14 Apr','via Ana'],
+      ['mira','Mira','uni',2,'28 Aug','studio partner'],
+      ['felix','Felix','uni',1,'05 Nov','via Daniel'],
+      ['sena','Sena','uni',1,'17 Feb','via Mira'],
+      ['ivo','Ivo','hood',2,'01 Sep','downstairs'],
+      ['greta','Greta','hood',2,'13 May','downstairs'],
+      ['malik','Malik','hood',1,'26 Oct','via Greta'],
+      ['rosa','Rosa','hood',1,'07 Jul','the café'],
+    ];
+    const L = [
+      ['me','marta'],['me','jorge'],['me','ines'],['marta','jorge'],['marta','ines'],['jorge','ines'],
+      ['me','rui'],['rui','clara'],['rui','jorge'],['marta','clara'],
+      ['me','tomas'],['me','sofia'],['me','kaito'],['tomas','sofia'],['tomas','nadia'],['sofia','nadia'],
+      ['kaito','bruno'],['me','bruno'],['nadia','bruno'],
+      ['me','priya'],['me','leo'],['me','hannah'],['priya','leo'],['leo','hannah'],['hannah','omar'],
+      ['me','omar'],['omar','yuki'],['priya','yuki'],
+      ['me','ana'],['me','daniel'],['me','mira'],['ana','daniel'],['ana','mira'],['daniel','felix'],
+      ['me','felix'],['mira','sena'],['ana','sena'],
+      ['me','ivo'],['me','greta'],['ivo','greta'],['greta','malik'],['me','malik'],['malik','rosa'],['me','rosa'],
+      ['ana','tomas'],['priya','nadia'],['marta','sofia'],['ivo','leo'],['rui','daniel'],['greta','clara'],
+    ];
+
+    const r = rng(80126);
+    this.byId = {};
+    this.nodes = P.map((p, i) => {
+      const a = (i / P.length) * Math.PI * 2;
+      const n = {
+        id: p[0], name: p[1], group: p[2], close: p[3], bday: p[4], via: p[5],
+        initials: p[1] === 'You' ? 'YOU' : p[1].slice(0, 2).toUpperCase(),
+        me: p[0] === 'me',
+        x: p[0] === 'me' ? 0 : Math.cos(a) * (60 + r() * 40),
+        y: p[0] === 'me' ? 0 : Math.sin(a) * (60 + r() * 40),
+        vx: 0, vy: 0, r: p[0] === 'me' ? 17 : 7 + p[3] * 2.4,
+        dim: 1, dimT: 1, appear: 0, born: 0.25 + i * 0.055,
+        dec: 0.4, decT: 0.4, phase: r() * 6.28, sel: false, selP: 0,
+      };
+      this.byId[n.id] = n;
+      return n;
+    });
+
+    // events: one source of truth for every "when did we meet"
+    const groupsOf = {};
+    this.nodes.forEach(n => { if (!n.me) (groupsOf[n.group] = groupsOf[n.group] || []).push(n.id); });
+    const gk = Object.keys(groupsOf);
+    this.events = [];
+    for (let i = 0; i < 74; i++) {
+      const g = gk[Math.floor(r() * gk.length)];
+      const pool = groupsOf[g].slice();
+      const k = 1 + Math.floor(r() * Math.min(4, pool.length));
+      const who = [];
+      for (let j = 0; j < k; j++) who.push(pool.splice(Math.floor(r() * pool.length), 1)[0]);
+      const withMe = r() < 0.82;
+      if (withMe) who.push('me');
+      // closeness bias: close people get recent days, distant get old ones
+      const bias = who.reduce((s, id) => s + this.byId[id].close, 0) / who.length;
+      const day = Math.round(Math.pow(r(), 0.55 + bias * 0.42) * 540) + 1;
+      this.events.push({ day, who, place: PLACES[Math.floor(r() * PLACES.length)] });
+    }
+    // guarantee a few very fresh ones so the graph has living light
+    [['tomas','sofia'],['marta'],['priya','leo'],['ana'],['ivo','greta']].forEach((w, i) => {
+      this.events.push({ day: 2 + i * 4, who: w.concat('me'), place: PLACES[i * 2] });
+    });
+    this.events.sort((a, b) => a.day - b.day);
+
+    this.evByPerson = {};
+    this.nodes.forEach(n => { this.evByPerson[n.id] = this.events.filter(e => e.who.indexOf(n.id) >= 0); });
+
+    this.links = L.map(([a, b], i) => {
+      const shared = this.events.filter(e => e.who.indexOf(a) >= 0 && e.who.indexOf(b) >= 0);
+      return { a: this.byId[a], b: this.byId[b], ev: shared, dec: 0.6, decT: 0.6, phase: (i * 0.37) % 1, i };
+    });
+    this.adj = {};
+    this.nodes.forEach(n => { this.adj[n.id] = []; });
+    this.links.forEach(l => { this.adj[l.a.id].push(l.b.id); this.adj[l.b.id].push(l.a.id); });
+    this.anchors = {};
+    gk.forEach((g, i) => {
+      const a = (i / gk.length) * Math.PI * 2 - Math.PI / 2;
+      this.anchors[g] = { x: Math.cos(a) * 205, y: Math.sin(a) * 205 };
+    });
+  }
+
+  horizon() { return this.props.decayHorizon ?? 240; }
+  daysFor(list, scrub) {
+    for (let i = 0; i < list.length; i++) if (list[i].day >= scrub) return list[i].day - scrub;
+    return 900;
+  }
+  decayOf(days) { const h = this.horizon(); return Math.min(1, Math.pow(Math.max(0, days) / h, 0.82)); }
+  personDays(id) { return this.daysFor(this.evByPerson[id], this.state.scrub); }
+
+  /* ---------- lifecycle ---------- */
+  host() { return document.getElementById('gx8-host') || this.hostRef.current; }
+  componentDidMount() {
+    try { this.mount(); } catch (err) { window.__gx8err = (err && err.stack) || String(err); }
+  }
+  mount() {
+    if (!this.bootTimer) this.bootTimer = setTimeout(() => this.setState({ mode: 'home' }), 2600);
+    if (!this.host()) { clearTimeout(this.retryTimer); this.retryTimer = setTimeout(() => this.componentDidMount(), 32); return; }
+    if (this.svg) return;
+    this.buildSvg();
+    this.ro = new ResizeObserver(() => this.resize());
+    this.ro.observe(this.host());
+    this.resize();
+    this.schedule();
+    window.addEventListener('pointermove', this.onMove);
+    window.addEventListener('pointerup', this.onUp);
+    document.addEventListener('visibilitychange', this.onVis);
+  }
+  schedule() {
+    if (this.raf) cancelAnimationFrame(this.raf);
+    if (this.tmr) clearTimeout(this.tmr);
+    if (document.hidden) this.tmr = setTimeout(() => this.loop(performance.now()), 100);
+    else this.raf = requestAnimationFrame(this.loop);
+  }
+  onVis = () => { this.schedule(); };
+  componentWillUnmount() {
+    cancelAnimationFrame(this.raf); clearTimeout(this.tmr); clearTimeout(this.retryTimer);
+    clearTimeout(this.bootTimer); clearTimeout(this.toastTimer);
+    document.removeEventListener('visibilitychange', this.onVis);
+    if (this.ro) this.ro.disconnect();
+    window.removeEventListener('pointermove', this.onMove);
+    window.removeEventListener('pointerup', this.onUp);
+  }
+  resize() {
+    const el = this.host(); if (!el) return;
+    const b = el.getBoundingClientRect();
+    this.W = b.width; this.H = b.height;
+    this.svg.setAttribute('viewBox', `0 0 ${this.W} ${this.H}`);
+  }
+
+  /* ---------- svg construction ---------- */
+  el(t, a) { const n = document.createElementNS(NS, t); for (const k in a) n.setAttribute(k, a[k]); return n; }
+  buildSvg() {
+    const host = this.host();
+    const svg = this.el('svg', { width: '100%', height: '100%', style: 'display:block;overflow:visible' });
+    this.svg = svg;
+    const defs = this.el('defs');
+    const grid = this.el('pattern', { id: 'g8x', width: 46, height: 46, patternUnits: 'userSpaceOnUse' });
+    grid.appendChild(this.el('path', { d: 'M46 0H0V46', fill: 'none', stroke: 'rgba(125,231,247,0.055)', 'stroke-width': 1 }));
+    defs.appendChild(grid);
+    svg.appendChild(defs);
+    this.gridRect = this.el('rect', { width: '100%', height: '100%', fill: 'url(#g8x)' });
+    svg.appendChild(this.gridRect);
+
+    const scene = this.el('g'); this.scene = scene; svg.appendChild(scene);
+    this.gRings = this.el('g'); scene.appendChild(this.gRings);
+    this.gHull = this.el('path', { fill: 'rgba(125,231,247,0.05)', stroke: 'rgba(125,231,247,0.35)', 'stroke-width': 1, 'stroke-dasharray': '5 6', opacity: 0 });
+    scene.appendChild(this.gHull);
+    const gl = this.el('g'); scene.appendChild(gl); this.gLinks = gl;
+    const gp = this.el('g'); scene.appendChild(gp); this.gPackets = gp;
+    const gn = this.el('g'); scene.appendChild(gn); this.gNodes = gn;
+    this.gLabels = this.el('g'); scene.appendChild(this.gLabels);
+
+    // orbit guide rings (orbit layout)
+    this.rings = [110, 190, 275, 355].map(r => {
+      const c = this.el('circle', { cx: 0, cy: 0, r, fill: 'none', stroke: 'rgba(125,231,247,0.16)', 'stroke-width': 1, 'stroke-dasharray': '2 7', opacity: 0 });
+      this.gRings.appendChild(c); return c;
+    });
+
+    this.links.forEach(l => {
+      l.glow = this.el('path', { fill: 'none', 'stroke-linecap': 'round' });
+      l.core = this.el('path', { fill: 'none', 'stroke-linecap': 'round' });
+      gl.appendChild(l.glow); gl.appendChild(l.core);
+      l.pk = this.el('circle', { r: 1.9, fill: '#ffffff', opacity: 0 });
+      gp.appendChild(l.pk);
+    });
+
+    this.nodes.forEach(n => {
+      const g = this.el('g', { style: 'cursor:pointer' });
+      n.g = g;
+      n.halo = this.el('circle', { r: n.r + 11, fill: 'none', 'stroke-width': 6, opacity: 0.1 });
+      n.ring = this.el('circle', { r: n.r + 6, fill: 'none', 'stroke-width': 1.6, 'stroke-linecap': 'round', transform: 'rotate(-90)' });
+      n.ringBg = this.el('circle', { r: n.r + 6, fill: 'none', stroke: 'rgba(125,231,247,0.1)', 'stroke-width': 1.6 });
+      n.core = this.el('circle', { r: n.r });
+      n.selRing = this.el('circle', { r: n.r + 12, fill: 'none', stroke: '#ffffff', 'stroke-width': 1.2, opacity: 0 });
+      n.txt = this.el('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-family': 'Chakra Petch, sans-serif', 'font-size': n.me ? 8.5 : 9, 'font-weight': 600, 'letter-spacing': 0.5, 'pointer-events': 'none' });
+      n.txt.textContent = n.initials;
+      g.appendChild(n.halo); g.appendChild(n.ringBg); g.appendChild(n.ring); g.appendChild(n.core); g.appendChild(n.selRing); g.appendChild(n.txt);
+      gn.appendChild(g);
+      n.lbl = this.el('text', { 'text-anchor': 'middle', 'font-family': 'Chakra Petch, sans-serif', 'font-size': 10.5, 'font-weight': 500, 'pointer-events': 'none' });
+      n.lbl.textContent = n.me ? '' : n.name;
+      this.gLabels.appendChild(n.lbl);
+      g.addEventListener('pointerdown', e => this.onNodeDown(e, n));
+    });
+
+    this.strataLbls = Object.keys(this.anchors).map(g => {
+      const t = this.el('text', { 'text-anchor': 'middle', 'font-family': 'JetBrains Mono, monospace', 'font-size': 8.5, 'letter-spacing': 2.2, fill: 'rgba(125,231,247,0.42)', opacity: 0, 'pointer-events': 'none' });
+      t.textContent = GROUPS[g].label.toUpperCase();
+      this.gLabels.appendChild(t); return { g, t };
+    });
+
+    host.appendChild(svg);
+    svg.addEventListener('pointerdown', this.onBgDown);
+    svg.addEventListener('wheel', this.onWheel, { passive: false });
+  }
+
+  /* ---------- interaction ---------- */
+  toWorld(cx, cy) {
+    const b = this.host().getBoundingClientRect();
+    return { x: (cx - b.left - this.W / 2) / this.cam.k + this.cam.x, y: (cy - b.top - this.H / 2) / this.cam.k + this.cam.y };
+  }
+  onNodeDown = (e, n) => {
+    e.stopPropagation();
+    const w = this.toWorld(e.clientX, e.clientY);
+    this.drag = { n, dx: n.x - w.x, dy: n.y - w.y, moved: 0, t: performance.now() };
+    n.pinned = true;
+  };
+  onBgDown = (e) => {
+    if (this.state.mode === 'boot') { clearTimeout(this.bootTimer); this.setState({ mode: 'home' }); return; }
+    this.pan = { sx: e.clientX, sy: e.clientY, cx: this.cam.tx, cy: this.cam.ty, moved: 0 };
+  };
+  onMove = (e) => {
+    if (this.drag) {
+      const w = this.toWorld(e.clientX, e.clientY);
+      const n = this.drag.n;
+      this.drag.moved += Math.abs(w.x + this.drag.dx - n.x) + Math.abs(w.y + this.drag.dy - n.y);
+      n.x = w.x + this.drag.dx; n.y = w.y + this.drag.dy; n.vx = 0; n.vy = 0;
+    } else if (this.pan) {
+      const dx = (e.clientX - this.pan.sx) / this.cam.k, dy = (e.clientY - this.pan.sy) / this.cam.k;
+      this.pan.moved += Math.abs(dx) + Math.abs(dy);
+      this.cam.tx = this.pan.cx - dx; this.cam.ty = this.pan.cy - dy;
+      this.cam.x = this.cam.tx; this.cam.y = this.cam.ty;
+    } else if (this.scrubbing) { this.scrubTo(e.clientX); }
+  };
+  onUp = () => {
+    if (this.drag) {
+      const d = this.drag; d.n.pinned = false;
+      if (d.moved < 6 && performance.now() - d.t < 600) this.tapNode(d.n);
+      this.drag = null;
+    }
+    this.pan = null; this.scrubbing = false;
+  };
+  onWheel = (e) => {
+    e.preventDefault(); e.stopPropagation();
+    this.cam.tk = Math.min(2.6, Math.max(0.35, this.cam.tk * (e.deltaY > 0 ? 0.92 : 1.09)));
+    this.userZoom = true;
+  };
+  tapNode(n) {
+    const m = this.state.mode;
+    if (m === 'log') {
+      if (n.me) return;
+      const sel = this.state.sel.indexOf(n.id) >= 0 ? this.state.sel.filter(x => x !== n.id) : this.state.sel.concat(n.id);
+      this.setState({ sel });
+    } else if (m === 'add') {
+      if (n.me || !this.newNode) return;
+      const has = this.newLinks.indexOf(n.id) >= 0;
+      this.newLinks = has ? this.newLinks.filter(x => x !== n.id) : this.newLinks.concat(n.id);
+      if (!has) this.spawnLink(this.newNode, n);
+      this.setState({ v: this.state.v + 1 });
+    } else {
+      if (n.me) { this.setState({ mode: 'home', focus: null }); return; }
+      this.userZoom = false;
+      this.setState({ mode: 'focus', focus: n.id });
+    }
+  }
+  spawnLink(a, b) {
+    const l = { a, b, ev: [{ day: 0, who: [a.id, b.id], place: 'today' }], dec: 0.9, decT: 0, phase: Math.random(), i: this.links.length };
+    l.glow = this.el('path', { fill: 'none', 'stroke-linecap': 'round' });
+    l.core = this.el('path', { fill: 'none', 'stroke-linecap': 'round' });
+    l.pk = this.el('circle', { r: 1.9, fill: '#fff', opacity: 0 });
+    this.gLinks.appendChild(l.glow); this.gLinks.appendChild(l.core);
+    this.gPackets.appendChild(l.pk);
+    this.links.push(l);
+    this.adj[a.id].push(b.id); this.adj[b.id].push(a.id);
+  }
+  scrubTo(clientX) {
+    const el = this.trackRef.current || document.getElementById('gx8-track'); if (!el) return;
+    const b = el.getBoundingClientRect();
+    const p = Math.min(1, Math.max(0, (clientX - b.left) / b.width));
+    this.setState({ scrub: Math.round((1 - p) * 540), playing: false });
+  }
+
+  /* ---------- simulation ---------- */
+  loop = (ts) => {
+    this.raf = 0; this.tmr = 0;
+    this.schedule();
+    if (!this.svg) return;
+    if (!this.t0) this.t0 = ts;
+    const t = (ts - this.t0) / 1000; this.t = t;
+    const h = this.host();
+    if (!h) return;
+    if (this.svg.parentNode !== h) { h.appendChild(this.svg); this.resize(); }
+    if (this.state.playing) {
+      const s = this.state.scrub - 3.2;
+      if (s <= 0) this.setState({ scrub: 0, playing: false }); else this.setState({ scrub: s });
+    }
+    this.step(t);
+    this.paint(t);
+  };
+
+  step(t) {
+    const S = this.state, N = this.nodes;
+    const boot = S.mode === 'boot';
+    const focus = S.focus ? this.byId[S.focus] : null;
+    const nb = focus ? this.adj[focus.id] : null;
+    const breathe = (this.props.breathing ?? true) ? 1 : 0;
+
+    for (let i = 0; i < N.length; i++) {
+      const a = N[i];
+      a.appear = Math.min(1, Math.max(0, (t - a.born) / 0.7));
+      for (let j = i + 1; j < N.length; j++) {
+        const b = N[j];
+        let dx = b.x - a.x, dy = b.y - a.y, d2 = dx * dx + dy * dy;
+        if (d2 < 4) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 4; }
+        const d = Math.sqrt(d2);
+        let f = 2100 / d2; if (f > 3) f = 3;
+        const fx = f * dx / d, fy = f * dy / d;
+        a.vx -= fx; a.vy -= fy; b.vx += fx; b.vy += fy;
+      }
+    }
+    for (const l of this.links) {
+      const a = l.a, b = l.b;
+      const rest = 52 + l.dec * 74;
+      let dx = b.x - a.x, dy = b.y - a.y; const d = Math.hypot(dx, dy) || 1;
+      const f = (d - rest) * 0.0085 * (1.25 - l.dec * 0.75);
+      const fx = f * dx / d, fy = f * dy / d;
+      a.vx += fx; a.vy += fy; b.vx -= fx; b.vy -= fy;
+    }
+
+    const pullR = (n, target, k) => {
+      const d = Math.hypot(n.x, n.y) || 0.001;
+      const f = (d - target) * k;
+      n.vx -= f * n.x / d; n.vy -= f * n.y / d;
+    };
+
+    for (const n of N) {
+      n.dimT = 1;
+      if (n.me) { n.vx += -n.x * 0.06; n.vy += -n.y * 0.06; }
+      else if (S.mode === 'focus' && focus) {
+        if (n === focus) { n.vx += -n.x * 0.09; n.vy += -n.y * 0.09; }
+        else if (nb.indexOf(n.id) >= 0) pullR(n, 124, 0.012);
+        else { pullR(n, 330, 0.008); n.dimT = 0.07; }
+      } else if (S.mode === 'nudge') {
+        if (this.nudgeIds && this.nudgeIds.indexOf(n.id) >= 0) pullR(n, 296 + Math.sin(t * 2.2 + n.phase) * 30, 0.022);
+        else n.dimT = 0.13;
+      } else if (S.mode === 'group' && S.group) {
+        if (S.group.indexOf(n.id) >= 0) pullR(n, 86, 0.02); else { pullR(n, 330, 0.01); n.dimT = 0.08; }
+      } else if (S.mode === 'log') {
+        if (n.sel) pullR(n, 66, 0.026); else n.dimT = 0.42;
+      } else if (S.mode === 'add') {
+        n.dimT = this.newLinks && this.newLinks.indexOf(n.id) >= 0 ? 1 : 0.5;
+      }
+
+      if (S.mode === 'home' || S.mode === 'boot' || S.mode === 'add') {
+        if (S.layout === 'orbit' && !n.me) pullR(n, 104 + n.dec * 250, 0.012);
+        else if (S.layout === 'strata' && !n.me) {
+          const A = this.anchors[n.group];
+          n.vx += (A.x - n.x) * 0.016; n.vy += (A.y - n.y) * 0.016;
+        } else if (!n.me) { n.vx += -n.x * 0.0016; n.vy += -n.y * 0.0016; }
+      } else if (!n.me && S.mode !== 'focus') { n.vx += -n.x * 0.0016; n.vy += -n.y * 0.0016; }
+
+      if (breathe && !n.pinned) {
+        n.vx += Math.sin(t * 0.62 + n.phase) * 0.035;
+        n.vy += Math.cos(t * 0.55 + n.phase * 1.7) * 0.035;
+      }
+      if (!n.pinned) { n.vx *= 0.865; n.vy *= 0.865; n.x += n.vx * (boot ? 0.35 : 1); n.y += n.vy * (boot ? 0.35 : 1); }
+      n.dim = lerp(n.dim, n.dimT, 0.09);
+      n.selP = lerp(n.selP, n.sel ? 1 : 0, 0.16);
+      n.decT = this.decayOf(this.daysFor(this.evByPerson[n.id] || [], S.scrub));
+      n.dec = lerp(n.dec, n.decT, 0.1);
+    }
+    for (const l of this.links) {
+      l.decT = this.decayOf(this.daysFor(l.ev, S.scrub));
+      l.dec = lerp(l.dec, l.decT, 0.1);
+    }
+
+    // camera
+    let tk = 0.78, ty = 0;
+    if (S.mode === 'focus') { tk = 1.42; ty = 146; }
+    else if (S.mode === 'nudge') { tk = 0.5; ty = 205; }
+    else if (S.mode === 'group') { tk = 1.0; ty = 172; }
+    else if (S.mode === 'log') { tk = 0.9; ty = 88; }
+    else if (S.mode === 'add') { tk = 0.9; ty = 86; }
+    else if (S.mode === 'time') { tk = 0.66; ty = 116; }
+    else if (S.mode === 'boot') tk = 0.5;
+    if (!this.userZoom) this.cam.tk = tk;
+    if (S.mode !== 'home' || !this.pan) { this.cam.tx = 0; this.cam.ty = ty; }
+    this.cam.k = lerp(this.cam.k, this.cam.tk, 0.075);
+    this.cam.x = lerp(this.cam.x, this.cam.tx, 0.085);
+    this.cam.y = lerp(this.cam.y, this.cam.ty, 0.085);
+  }
+
+  /* ---------- paint ---------- */
+  paint(t) {
+    const S = this.state, k = this.cam.k;
+    this.scene.setAttribute('transform', `translate(${this.W / 2},${this.H / 2}) scale(${k}) translate(${-this.cam.x},${-this.cam.y})`);
+    this.gridRect.setAttribute('opacity', 0.5 + Math.sin(t * 0.4) * 0.08);
+    const style = this.props.linkDecayStyle ?? 'both';
+    const trails = this.props.showTrails ?? true;
+    const labelMode = this.props.nodeLabels ?? 'smart';
+    const bootF = Math.min(1, Math.max(0, (t - 0.5) / 1.6));
+
+    this.rings.forEach(c => c.setAttribute('opacity', S.layout === 'orbit' && (S.mode === 'home' || S.mode === 'boot') ? 1 : 0));
+    this.strataLbls.forEach(({ g, t: el }) => {
+      const A = this.anchors[g];
+      el.setAttribute('x', A.x * 1.34); el.setAttribute('y', A.y * 1.34 + (A.y < 0 ? -18 : 26));
+      el.setAttribute('opacity', S.layout === 'strata' && S.mode === 'home' ? 1 : 0);
+    });
+
+    for (const l of this.links) {
+      const a = l.a, b = l.b;
+      const vis = Math.min(a.appear, b.appear) * Math.min(a.dim, b.dim) * bootF;
+      const dec = l.dec;
+      const fade = style === 'fragment' ? 0 : 1;
+      const frag = style === 'fade' ? 0 : 1;
+      const op = vis * (0.9 - dec * 0.62 * fade) * (dec > 0.92 ? 0.55 : 1);
+      const w = (0.4 + (1 - dec) * 1.5) * (style === 'fragment' ? 1.15 : 1);
+      const col = dec > 0.62 ? mixHex('#3E7E90', AMBER, Math.min(1, (dec - 0.62) / 0.38)) : mixHex(GROUPS[a.me ? b.group : a.group].color, '#3E7E90', dec / 0.62);
+      const d = this.linkPath(a, b, frag ? dec : 0, t, l.phase * 6.28);
+      l.core.setAttribute('d', d);
+      l.core.setAttribute('stroke', col);
+      l.core.setAttribute('stroke-width', w);
+      l.core.setAttribute('opacity', op);
+      l.glow.setAttribute('d', d);
+      l.glow.setAttribute('stroke', col);
+      l.glow.setAttribute('stroke-width', w * 4.5);
+      l.glow.setAttribute('opacity', op * (1 - dec) * 0.14);
+      if (trails && dec < 0.42 && vis > 0.2) {
+        const p = ((t * (0.34 - dec * 0.2) + l.phase) % 1);
+        const e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+        l.pk.setAttribute('cx', lerp(a.x, b.x, e));
+        l.pk.setAttribute('cy', lerp(a.y, b.y, e));
+        l.pk.setAttribute('opacity', vis * (1 - dec / 0.42) * 0.95);
+        l.pk.setAttribute('r', 1.5 + (1 - dec) * 1.1);
+      } else l.pk.setAttribute('opacity', 0);
+    }
+
+    const C = 2 * Math.PI;
+    for (const n of this.nodes) {
+      const ap = n.appear < 1 ? 1 - Math.pow(1 - n.appear, 3) : 1;
+      const pulse = n.me ? 1 : 1 + (1 - n.dec) * 0.06 * Math.sin(t * 2.6 + n.phase) + n.selP * 0.16;
+      n.g.setAttribute('transform', `translate(${n.x},${n.y}) scale(${(0.25 + ap * 0.75) * pulse})`);
+      n.g.setAttribute('opacity', n.dim * ap * bootF);
+      const gc = n.me ? '#FFFFFF' : GROUPS[n.group].color;
+      const rc = n.dec > 0.6 ? mixHex('#2B6B7C', AMBER, Math.min(1, (n.dec - 0.6) / 0.4)) : gc;
+      n.core.setAttribute('fill', n.me ? '#7DE7F7' : mixHex(gc, '#0B1A21', 0.15 + n.dec * 0.66));
+      n.core.setAttribute('stroke', rc);
+      n.core.setAttribute('stroke-width', n.me ? 0 : 1);
+      n.core.setAttribute('stroke-opacity', 0.45);
+      n.txt.setAttribute('fill', n.me ? '#04121a' : mixHex('#EAFBFF', '#4E7684', n.dec * 0.8));
+      const circ = C * (n.r + 6);
+      n.ring.setAttribute('stroke', rc);
+      n.ring.setAttribute('stroke-dasharray', `${circ * (1 - n.dec)} ${circ}`);
+      n.ring.setAttribute('opacity', n.me ? 0 : 0.9);
+      n.ringBg.setAttribute('opacity', n.me ? 0 : 1);
+      n.halo.setAttribute('stroke', gc);
+      n.halo.setAttribute('opacity', (n.me ? 0.4 : (1 - n.dec) * 0.3) * (0.7 + 0.3 * Math.sin(t * 1.6 + n.phase)));
+      n.selRing.setAttribute('opacity', n.selP * 0.9);
+      n.selRing.setAttribute('stroke-dasharray', `${3 + n.selP * 4} 4`);
+      n.selRing.setAttribute('r', n.r + 12 + (1 - n.selP) * 8);
+      const showLbl = labelMode === 'always' ? 1 : labelMode === 'never' ? 0
+        : (k > 0.86 || n.close >= 3 || S.focus === n.id || n.sel || S.mode === 'log' || S.mode === 'add'
+           || (S.mode === 'nudge' && this.nudgeIds && this.nudgeIds.indexOf(n.id) >= 0)
+           || (S.mode === 'group' && S.group && S.group.indexOf(n.id) >= 0)) ? 1 : 0;
+      n.lbl.setAttribute('x', n.x); n.lbl.setAttribute('y', n.y + n.r + 15);
+      n.lbl.setAttribute('opacity', showLbl * n.dim * ap * bootF * 0.92);
+      n.lbl.setAttribute('fill', mixHex('#CFE9F2', '#4E7684', n.dec * 0.75));
+    }
+
+    if (S.mode === 'group' && S.group) {
+      const pts = S.group.map(id => this.byId[id]).concat(this.byId.me);
+      const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length, cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+      const sorted = pts.slice().sort((p, q) => Math.atan2(p.y - cy, p.x - cx) - Math.atan2(q.y - cy, q.x - cx));
+      const d = sorted.map((p, i) => {
+        const a = Math.atan2(p.y - cy, p.x - cx), r = Math.hypot(p.x - cx, p.y - cy) + 26;
+        return `${i ? 'L' : 'M'}${(cx + Math.cos(a) * r).toFixed(1)},${(cy + Math.sin(a) * r).toFixed(1)}`;
+      }).join('') + 'Z';
+      this.gHull.setAttribute('d', d);
+      this.gHull.setAttribute('opacity', 1);
+      this.gHull.setAttribute('stroke-dashoffset', -t * 14);
+    } else this.gHull.setAttribute('opacity', 0);
+  }
+
+  linkPath(a, b, dec, t, seed) {
+    const dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy) || 1;
+    if (dec < 0.22) return `M${a.x.toFixed(1)},${a.y.toFixed(1)}L${b.x.toFixed(1)},${b.y.toFixed(1)}`;
+    const ux = dx / len, uy = dy / len, px = -uy, py = ux;
+    const segs = Math.max(3, Math.round(len / 15));
+    const fill = Math.max(0.14, 0.98 - dec * 0.72);
+    const amp = Math.pow(Math.max(0, dec - 0.22) / 0.78, 2) * 11;
+    let d = '';
+    for (let i = 0; i < segs; i++) {
+      const s0 = i / segs, s1 = (i + fill) / segs;
+      const bell = Math.sin(((s0 + s1) / 2) * Math.PI);
+      const o = amp * bell * Math.sin(t * 0.85 + i * 1.9 + seed);
+      const x0 = a.x + dx * s0 + px * o, y0 = a.y + dy * s0 + py * o;
+      const x1 = a.x + dx * s1 + px * o, y1 = a.y + dy * s1 + py * o;
+      d += `M${x0.toFixed(1)},${y0.toFixed(1)}L${x1.toFixed(1)},${y1.toFixed(1)}`;
+    }
+    return d;
+  }
+
+  /* ---------- derived copy ---------- */
+  daysLabel(d) { return d >= 900 ? 'never' : d === 0 ? 'today' : d === 1 ? 'yesterday' : d < 21 ? d + ' days ago' : d < 60 ? Math.round(d / 7) + ' weeks ago' : Math.round(d / 30) + ' months ago'; }
+  spanLabel(d) { return d >= 900 ? 'longer than you can remember' : d < 21 ? d + ' days' : d < 60 ? Math.round(d / 7) + ' weeks' : Math.round(d / 30) + ' months'; }
+  shortDate(d) {
+    const base = new Date(2026, 7, 1); base.setDate(base.getDate() - d);
+    return `${base.getDate()} ${MONTHS[base.getMonth()]}`;
+  }
+  weakest(count) {
+    return this.nodes.filter(n => !n.me).map(n => ({ n, d: this.personDays(n.id) }))
+      .sort((a, b) => (b.d * (0.55 + a.n.close * 0.22)) - (a.d * (0.55 + b.n.close * 0.22)))
+      .slice(0, count);
+  }
+  suggestGroup(seedId) {
+    const cands = this.weakest(14).map(w => w.n.id);
+    const anchor = seedId || cands[0];
+    const scored = this.nodes.filter(n => !n.me && n.id !== anchor).map(n => {
+      const mutual = this.adj[n.id].filter(x => this.adj[anchor].indexOf(x) >= 0).length;
+      const linked = this.adj[anchor].indexOf(n.id) >= 0 ? 1 : 0;
+      const cross = n.group !== this.byId[anchor].group ? 1.6 : 0;
+      return { id: n.id, s: mutual * 2 + linked * 3 + cross + Math.min(3, this.personDays(n.id) / 90) };
+    }).sort((a, b) => b.s - a.s);
+    return [anchor].concat(scored.slice(0, 4).map(x => x.id));
+  }
+  toast(msg) {
+    clearTimeout(this.toastTimer);
+    this.setState({ toast: msg });
+    this.toastTimer = setTimeout(() => this.setState({ toast: null }), 3400);
+  }
+  setMode(mode, extra) {
+    this.userZoom = false;
+    this.nodes.forEach(n => { n.sel = false; });
+    const st = Object.assign({ mode, focus: null, sel: [], group: null }, extra || {});
+    if (mode === 'nudge') this.nudgeIds = this.weakest(3).map(w => w.n.id);
+    if (mode === 'group') st.group = this.suggestGroup(extra && extra.seed);
+    this.setState(st);
+  }
+
+  renderVals() {
+    const S = this.state;
+    const on = (m) => S.mode === m;
+    this.nodes.forEach(n => { n.sel = S.sel.indexOf(n.id) >= 0; });
+    const f = S.focus ? this.byId[S.focus] : null;
+    const sheet = (open) => ({ y: open ? '0%' : '112%', op: open ? 1 : 0, pe: open ? 'auto' : 'none' });
+    const sf = sheet(on('focus')), sl = sheet(on('log')), sn = sheet(on('nudge')),
+          sg = sheet(on('group')), st = sheet(on('time')), sa = sheet(on('add'));
+
+    let fv = { name: '', group: '', via: '', last: '', bday: '', ctx: [], hist: [], sig: '', sigW: '0%', col: '#7DE7F7', line: '' };
+    if (f) {
+      const d = this.personDays(f.id);
+      const dec = this.decayOf(d);
+      const mutual = this.adj[f.id].filter(x => x !== 'me').map(x => this.byId[x].name);
+      fv = {
+        name: f.name,
+        group: GROUPS[f.group].label,
+        via: f.via ? f.via : '',
+        last: this.daysLabel(d),
+        bday: f.bday,
+        col: dec > 0.6 ? mixHex('#7DE7F7', AMBER, Math.min(1, (dec - 0.6) / 0.4)) : '#7DE7F7',
+        sig: Math.round((1 - dec) * 100) + '%',
+        sigW: Math.max(3, Math.round((1 - dec) * 100)) + '%',
+        ctx: [GROUPS[f.group].label].concat(mutual.slice(0, 3).map(m => 'also knows ' + m)),
+        hist: this.evByPerson[f.id].slice(0, 6).map(e => ({
+          when: this.shortDate(e.day),
+          place: e.place,
+          who: e.who.length > 2 ? '+' + (e.who.length - 1) : 'just you two',
+        })),
+        line: dec > 0.72
+          ? `It\u2019s been a while since ${f.name}. The thread is coming apart — one message would fix it.`
+          : dec > 0.38
+            ? `You and ${f.name} are drifting a little. ${mutual.length ? 'You could bring ' + mutual[0] + ' along.' : ''}`
+            : `You and ${f.name} are in good rhythm right now.`,
+      };
+    }
+
+    const selNames = S.sel.map(id => this.byId[id].name);
+    const selLine = selNames.length === 0 ? 'Nobody selected yet'
+      : selNames.length === 1 ? selNames[0]
+      : selNames.slice(0, -1).join(', ') + ' and ' + selNames[selNames.length - 1];
+    const whenOpts = [[0, 'Today'], [1, 'Yesterday'], [3, '3 days'], [7, 'Last week']];
+
+    const nudges = (this.nudgeIds || this.weakest(3).map(w => w.n.id)).map(id => {
+      const n = this.byId[id], d = this.personDays(id);
+      const shared = this.adj[id].filter(x => x !== 'me');
+      return {
+        id, name: n.name, initials: n.initials, days: d >= 900 ? '∞' : d + 'd',
+        line: shared.length ? `${GROUPS[n.group].label} · ${this.byId[shared[0]].name} saw them more recently` : GROUPS[n.group].label,
+        tap: () => { this.userZoom = false; this.setState({ mode: 'focus', focus: id }); },
+      };
+    });
+
+    const gIds = S.group || [];
+    const groupRows = gIds.map(id => {
+      const n = this.byId[id];
+      const inGroup = this.adj[id].filter(x => gIds.indexOf(x) >= 0).length;
+      return { initials: n.initials, name: n.name, note: `knows ${inGroup} of them · ${this.daysLabel(this.personDays(id))}` };
+    });
+    const gDays = gIds.length ? Math.max.apply(null, gIds.map(id => this.personDays(id))) : 0;
+
+    const scrubPct = (1 - S.scrub / 540);
+    const activeNow = this.events.filter(e => Math.abs(e.day - S.scrub) < 6).length;
+
+    return {
+      yes: true,
+      hostRef: this.hostRef,
+      trackRef: this.trackRef,
+      bootOp: on('boot') ? 1 : 0,
+      bootPE: on('boot') ? 'auto' : 'none',
+      chromeOp: on('boot') ? 0 : 1,
+      hintOp: on('home') ? 1 : 0,
+      hintLine1: S.layout === 'orbit' ? 'RADIUS = TIME SINCE YOU MET' : S.layout === 'strata' ? 'ISLANDS = SHARED CONTEXT' : 'FREE FORCE LAYOUT',
+      hintLine2: `${this.nodes.length - 1} PEOPLE · ${this.links.length} TIES`,
+
+      setWeb: () => this.setState({ layout: 'web', mode: 'home', focus: null }),
+      setOrbit: () => this.setState({ layout: 'orbit', mode: 'home', focus: null }),
+      setStrata: () => this.setState({ layout: 'strata', mode: 'home', focus: null }),
+      bgWeb: S.layout === 'web' ? 'rgba(125,231,247,.16)' : 'transparent',
+      bgOrbit: S.layout === 'orbit' ? 'rgba(125,231,247,.16)' : 'transparent',
+      bgStrata: S.layout === 'strata' ? 'rgba(125,231,247,.16)' : 'transparent',
+      opWeb: S.layout === 'web' ? 1 : 0.45,
+      opOrbit: S.layout === 'orbit' ? 1 : 0.45,
+      opStrata: S.layout === 'strata' ? 1 : 0.45,
+
+      zoomIn: () => { this.userZoom = true; this.cam.tk = Math.min(2.6, this.cam.tk * 1.28); },
+      zoomOut: () => { this.userZoom = true; this.cam.tk = Math.max(0.35, this.cam.tk * 0.78); },
+      recenter: () => { this.userZoom = false; this.cam.tx = 0; this.cam.ty = 0; },
+
+      goHome: () => this.setMode('home'),
+      goLog: () => this.setMode('log'),
+      goNudge: () => this.setMode('nudge'),
+      goGroup: () => this.setMode('group'),
+      goTime: () => this.setMode('time'),
+      navHome: on('home') ? 'rgba(125,231,247,.1)' : 'transparent',
+      navLog: on('log') ? 'rgba(125,231,247,.1)' : 'transparent',
+      navNudge: on('nudge') ? 'rgba(255,179,92,.12)' : 'transparent',
+      navGroup: on('group') ? 'rgba(125,231,247,.1)' : 'transparent',
+      navTime: on('time') ? 'rgba(125,231,247,.1)' : 'transparent',
+      opHome: on('home') || on('focus') ? 1 : 0.5,
+      opLog: on('log') ? 1 : 0.5,
+      opNudge: on('nudge') ? 1 : 0.5,
+      opGroup: on('group') ? 1 : 0.5,
+      opTime: on('time') ? 1 : 0.5,
+
+      focusY: sf.y, focusOp: sf.op, focusPE: sf.pe,
+      fName: fv.name, fGroup: fv.group, fVia: fv.via, fLast: fv.last, fBday: fv.bday,
+      fCtx: fv.ctx, fHistory: fv.hist, fSignal: fv.sig, fSignalW: fv.sigW, fDecayCol: fv.col, fLine: fv.line,
+      logWithFocus: () => { this.userZoom = false; this.nodes.forEach(n => { n.sel = false; }); this.setState({ mode: 'log', sel: [S.focus], focus: null }); },
+      groupWithFocus: () => this.setMode('group', { seed: S.focus }),
+
+      logY: sl.y, logOp: sl.op, logPE: sl.pe,
+      selLine,
+      dateChips: whenOpts.map(([d, label]) => ({
+        label, pick: () => this.setState({ when: d }),
+        bg: S.when === d ? 'rgba(125,231,247,.16)' : 'transparent',
+      })),
+      logBtnLabel: S.sel.length ? `LOG ${S.sel.length} ${S.sel.length === 1 ? 'PERSON' : 'PEOPLE'}` : 'PICK PEOPLE ON THE GRAPH',
+      logBtnBg: S.sel.length ? 'linear-gradient(#9defff,#4fd3ec)' : 'rgba(125,231,247,.14)',
+      logBtnOp: S.sel.length ? 1 : 0.55,
+      confirmLog: () => {
+        if (!S.sel.length) return;
+        const who = S.sel.concat('me');
+        const ev = { day: S.when, who, place: 'you logged this' };
+        this.events.unshift(ev); this.events.sort((a, b) => a.day - b.day);
+        who.forEach(id => { this.evByPerson[id] = this.events.filter(e => e.who.indexOf(id) >= 0); });
+        this.links.forEach(l => { l.ev = this.events.filter(e => e.who.indexOf(l.a.id) >= 0 && e.who.indexOf(l.b.id) >= 0); });
+        const names = S.sel.map(id => this.byId[id].name);
+        this.toast(names.length > 1
+          ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]} are lit up again.`
+          : `${names[0]} is lit up again.`);
+        this.setMode('home');
+      },
+      openAdd: () => { this.setState({ mode: 'add', addName: '', addStep: 0 }); },
+
+      nudgeY: sn.y, nudgeOp: sn.op, nudgePE: sn.pe,
+      nudges,
+      logNudges: () => { this.userZoom = false; this.nodes.forEach(n => { n.sel = false; }); this.setState({ mode: 'log', sel: (this.nudgeIds || []).slice() }); },
+
+      groupY: sg.y, groupOp: sg.op, groupPE: sg.pe,
+      groupTitle: gIds.length ? `${gIds.map(id => this.byId[id].name).slice(0, -1).join(', ')} and ${this.byId[gIds[gIds.length - 1]].name}` : '',
+      groupWhy: gIds.length ? `Everyone already knows someone else here. The quietest of them hasn\u2019t seen you in ${this.spanLabel(gDays)} — one table fixes five threads.` : '',
+      groupRows,
+      reshuffle: () => this.setState({ group: this.suggestGroup(this.weakest(9)[Math.floor(Math.random() * 9)].n.id) }),
+      confirmGroup: () => { this.toast('Ping drafted — “Table for six, Thursday?”'); this.setMode('home'); },
+
+      timeY: st.y, timeOp: st.op, timePE: st.pe,
+      onScrubDown: (e) => { this.scrubbing = true; this.scrubTo(e.clientX); },
+      scrubDate: this.shortDate(S.scrub),
+      scrubAgo: S.scrub < 1 ? 'now' : this.daysLabel(Math.round(S.scrub)),
+      scrubX: (scrubPct * 100).toFixed(2) + '%',
+      ticks: [0, 90, 180, 270, 360, 450, 540].map(d => ({ x: ((1 - d / 540) * 100).toFixed(1) + '%' })),
+      togglePlay: () => this.setState({ playing: !S.playing, scrub: S.playing ? S.scrub : (S.scrub < 10 ? 540 : S.scrub) }),
+      playLabel: S.playing ? '❚❚' : '▶',
+      scrubNote: S.scrub < 1
+        ? 'Today. Drag back and watch links thin, fray and fall apart as the months undo themselves.'
+        : `${activeNow} meet-ups within a week of this point. Links you kept alive stay bright.`,
+
+      addY: sa.y, addOp: sa.op, addPE: sa.pe,
+      addHeading: S.addStep === 0 ? 'DROP A NEW NODE INTO THE GRAPH' : 'NOW TAP WHO ALREADY KNOWS THEM',
+      addName: S.addName,
+      onAddName: (e) => this.setState({ addName: e.target.value }),
+      addHint: S.addStep === 0
+        ? 'They will appear at the centre, unattached. Then you wire them into the people they already know.'
+        : `${(this.newLinks || []).length} connection${(this.newLinks || []).length === 1 ? '' : 's'} so far. Every tap springs a new tie into place.`,
+      addBtnLabel: S.addStep === 0 ? 'DROP THE NODE' : 'DONE',
+      addBtnOp: S.addStep === 0 && !S.addName.trim() ? 0.5 : 1,
+      addNext: () => {
+        if (S.addStep === 0) {
+          const name = S.addName.trim(); if (!name) return;
+          const n = {
+            id: 'new' + this.nodes.length, name, group: 'hood', close: 1, bday: '— —', via: 'you just added them',
+            initials: name.slice(0, 2).toUpperCase(), me: false, x: 0, y: 0, vx: 0, vy: 0, r: 9.4,
+            dim: 1, dimT: 1, appear: 0, born: this.t, dec: 0, decT: 0, phase: Math.random() * 6.28, sel: false, selP: 0,
+          };
+          this.byId[n.id] = n; this.nodes.push(n); this.adj[n.id] = [];
+          this.evByPerson[n.id] = [{ day: 0, who: [n.id, 'me'], place: 'you added them' }];
+          this.buildNode(n);
+          this.newNode = n; this.newLinks = [];
+          this.setState({ addStep: 1 });
+        } else {
+          this.toast(`${this.newNode.name} is in the graph with ${(this.newLinks || []).length} ties.`);
+          this.newNode = null; this.setMode('home');
+        }
+      },
+
+      toast: S.toast || '',
+      toastOp: S.toast ? 1 : 0,
+      toastY: S.toast ? '0px' : '10px',
+    };
+  }
+
+  buildNode(n) {
+    const g = this.el('g', { style: 'cursor:pointer' });
+    n.g = g;
+    n.halo = this.el('circle', { r: n.r + 11, fill: 'none', 'stroke-width': 6, opacity: 0.1 });
+    n.ringBg = this.el('circle', { r: n.r + 6, fill: 'none', stroke: 'rgba(125,231,247,0.1)', 'stroke-width': 1.6 });
+    n.ring = this.el('circle', { r: n.r + 6, fill: 'none', 'stroke-width': 1.6, 'stroke-linecap': 'round', transform: 'rotate(-90)' });
+    n.core = this.el('circle', { r: n.r });
+    n.selRing = this.el('circle', { r: n.r + 12, fill: 'none', stroke: '#fff', 'stroke-width': 1.2, opacity: 0 });
+    n.txt = this.el('text', { 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-family': 'Chakra Petch, sans-serif', 'font-size': 9, 'font-weight': 600, 'pointer-events': 'none' });
+    n.txt.textContent = n.initials;
+    g.appendChild(n.halo); g.appendChild(n.ringBg); g.appendChild(n.ring); g.appendChild(n.core); g.appendChild(n.selRing); g.appendChild(n.txt);
+    this.gNodes.appendChild(g);
+    n.lbl = this.el('text', { 'text-anchor': 'middle', 'font-family': 'Chakra Petch, sans-serif', 'font-size': 10.5, 'font-weight': 500, 'pointer-events': 'none' });
+    n.lbl.textContent = n.name;
+    this.gLabels.appendChild(n.lbl);
+    g.addEventListener('pointerdown', e => this.onNodeDown(e, n));
+  }
+}
+
+</script>
+</body>
+</html>
