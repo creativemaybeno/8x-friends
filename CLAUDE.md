@@ -4,6 +4,24 @@ Hackathon monorepo for **8x Friends**, an offline-first social app.
 Three parts, one repo: `app/` (Flutter), `supabase/` (backend), `design/`
 (Claude Design files mirrored into Git).
 
+## Working mode — this is a hackathon
+
+Speed beats completeness. Optimise every session for a fast round trip.
+
+- **Do exactly what was asked, nothing more.** No refactors, no cleanup of
+  nearby code, no extra abstraction layers, no tests that were not requested,
+  no error handling for cases that will not happen in a demo. If you notice
+  something else worth doing, say so in one line — do not do it.
+- **Do not gold-plate.** The prototype needs to work on stage, not survive
+  production. Prefer the shortest change that works.
+- **Read narrowly.** Open the files the task needs. Do not survey the repo
+  before a small edit; do not read `specs/` unless the task changes behaviour.
+- **Ask only when blocked.** Otherwise pick the obvious option and note it.
+- **Answer in as few words as possible.** One or two lines is the norm.
+  No preamble, no summary of what you just did if the diff shows it, no
+  bullet-point recaps, no "next steps" unless asked. Code and file paths
+  over prose. If the task is done and unremarkable, say so and stop.
+
 ## Layout
 
 | Path              | What                                                            |
@@ -62,11 +80,10 @@ project with `mcp__claude-design__create_support_js`, never by copying bytes.
 
 ## Conventions
 
-- **Dart**: `dart format` before committing (CI runs
-  `--set-exit-if-changed`). `flutter_lints`. Prefer `final`; no `print` in
-  committed code.
-- **Migrations**: created via `make db-diff NAME=<snake_case>`, never hand-named.
-  CI enforces `<YYYYMMDDHHMMSS>_<snake_case>.sql`.
+- **Dart**: `dart format` before committing. `flutter_lints`. Prefer `final`;
+  no `print` in committed code.
+- **Migrations**: created via `make db-diff NAME=<snake_case>`, never hand-named
+  — `<YYYYMMDDHHMMSS>_<snake_case>.sql`.
 - **RLS is on by default.** Every new table needs policies in the same migration
   that creates it.
 - **Secrets**: only `*.example.json` templates are committed. The service-role

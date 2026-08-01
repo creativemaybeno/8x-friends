@@ -64,7 +64,7 @@ so **claim a design file in chat before you edit it.**
 
 ```
 make help                 # all targets
-make check                # everything CI runs that does not need Docker
+make check                # analyze + test + design doctor (no Docker needed)
 ```
 
 | Task                       | Command                          |
@@ -84,8 +84,6 @@ real values go in `app/dart_define.json` (gitignored). The Supabase
 publishable/anon key is a public, RLS-scoped credential and belongs in the client
 build; the **service-role key never does** — it lives in Supabase Edge Function
 secrets.
-
-CI fails the build if a file matching a secret pattern is ever tracked.
 
 ## Git LFS
 

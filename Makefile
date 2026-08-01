@@ -45,7 +45,7 @@ design-doctor: ## Check the design sync wiring
 design-plan: ## What changed in design/files/ since your last sync
 	node tools/design/sync.mjs plan
 
-check: app-test design-doctor ## Everything CI runs that does not need Docker
+check: app-test design-doctor ## Analyze + test + design doctor (no Docker needed)
 
 clean: ## Remove build output and design sync scratch space
 	cd app && flutter clean
