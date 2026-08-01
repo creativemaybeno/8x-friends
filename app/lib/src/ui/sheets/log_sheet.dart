@@ -1,19 +1,19 @@
-/// The ultra-fast path: who, when, optionally where.
+/// Logging a meet-up that already happened: who was there, and roughly when.
 library;
 
 import 'package:flutter/material.dart';
 
 import '../../model/decay.dart';
-import '../../model/models.dart';
 import '../../state/app_state.dart';
 import '../../theme/tokens.dart';
 import 'sheet_scaffold.dart';
 
+/// The three answers to "when". Anything older is rare enough to leave out —
+/// this flow has to be finishable in the time it takes to walk to the tram.
 const _whenChips = <(String, int)>[
-  ('Today', 0),
-  ('Yesterday', 1),
-  ('3 days', 3),
-  ('Last week', 7),
+  ('TODAY', 0),
+  ('YESTERDAY', 1),
+  ('THIS WEEK', 4),
 ];
 
 class LogSheet extends StatefulWidget {
@@ -24,63 +24,53 @@ class LogSheet extends StatefulWidget {
 }
 
 class _LogSheetState extends State<LogSheet> {
-  final _place = TextEditingController();
+  final Set<String> _selected = {};
   int _daysBack = 0;
+  bool _seeded = false;
 
   @override
-  void dispose() {
-    _place.dispose();
-    super.dispose();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_seeded) return;
+    _seeded = true;
+    // Arriving from the focus sheet, the person you were just looking at is
+    // almost always the person you were just with.
+    final state = AppScope.of(context);
+    final focused = state.focusedPersonId;
+    if (focused != null && state.isDirectlyConnected(focused)) {
+      _selected.add(focused);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
     final decay = state.decay;
-    final selected = state.selectedPersonIds;
-
-    final people = <Person>[
-      for (final p in state.people)
-        if (!p.isMe) p,
-    ]..sort((a, b) => decay.daysOf(a.id).compareTo(decay.daysOf(b.id)));
-
-    final chosen = <Person>[
+    final people = state.directPeople;
+    final chosen = <String>[
       for (final p in people)
-        if (selected.contains(p.id)) p,
+        if (_selected.contains(p.id)) p.id,
     ];
 
     return SheetScaffold(
-      label: 'TAP EVERYONE WHO WAS THERE',
-      title: chosen.isEmpty
-          ? 'Nobody selected yet'
-          : chosen.map((p) => p.name).join(', '),
+      label: 'LOG A MEET-UP',
+      title: 'Who were you with?',
+      subtitle: 'Adding it now keeps the graph honest.',
       onClose: state.goHome,
       footer: SheetButton(
-        label: chosen.isEmpty
-            ? 'PICK PEOPLE ON THE GRAPH'
-            : chosen.length == 1
-            ? 'LOG 1 PERSON'
-            : 'LOG ${chosen.length} PEOPLE',
+        label: 'THAT HAPPENED',
         onTap: chosen.isEmpty
             ? null
-            : () async {
-                final when = state.now.subtract(Duration(days: _daysBack));
-                final place = _place.text.trim();
-                await state.logMeetUp(
-                  occurredOn: DateTime(when.year, when.month, when.day),
-                  personIds: chosen.map((p) => p.id).toList(),
-                  place: place.isEmpty ? null : place,
-                );
-                // The sheet stays mounted while it slides away, so reset it —
-                // but only when the write actually landed.
-                if (!mounted || state.mode != AppMode.home) return;
-                _place.clear();
-                setState(() => _daysBack = 0);
-              },
+            : () => state.logMeetup(
+                personIds: chosen,
+                on: state.now.subtract(Duration(days: _daysBack)),
+              ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text('WHEN', style: Tokens.monoLabelDim),
+          const SizedBox(height: Tokens.gapS),
           Wrap(
             spacing: Tokens.gapXs,
             runSpacing: Tokens.gapXs,
@@ -94,36 +84,28 @@ class _LogSheetState extends State<LogSheet> {
             ],
           ),
           const SizedBox(height: Tokens.gapM),
-          TextField(
-            controller: _place,
-            style: Tokens.input,
-            cursorColor: Tokens.cyan,
-            decoration: InputDecoration(
-              hintText: 'Where?',
-              hintStyle: Tokens.input.copyWith(color: Tokens.faint),
-              filled: true,
-              fillColor: Tokens.borderColor,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(Tokens.radiusButton),
-                borderSide: BorderSide.none,
+          Row(
+            children: [
+              Expanded(
+                child: Text('WHO WAS THERE', style: Tokens.monoLabelDim),
               ),
-            ),
+              Text(
+                chosen.isEmpty ? 'NOBODY YET' : '${chosen.length} SELECTED',
+                style: Tokens.monoLabel,
+              ),
+            ],
           ),
-          const SizedBox(height: Tokens.gapM),
+          const SizedBox(height: Tokens.gapS),
           for (final p in people)
             SheetRow(
               title: p.name,
               meta: agoLabel(decay.daysOf(p.id)),
               dot: Tokens.contextColor(p.context),
-              selected: selected.contains(p.id),
-              onTap: () => state.toggleSelected(p.id),
+              selected: _selected.contains(p.id),
+              onTap: () => setState(() {
+                if (!_selected.remove(p.id)) _selected.add(p.id);
+              }),
             ),
-          const SizedBox(height: Tokens.gapS),
-          GestureDetector(
-            onTap: () => state.setMode(AppMode.add),
-            behavior: HitTestBehavior.opaque,
-            child: Text('+ SOMEONE NEW WAS THERE', style: Tokens.monoLabel),
-          ),
         ],
       ),
     );

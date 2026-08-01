@@ -209,13 +209,14 @@ class Nudge {
   final double score;
 }
 
-/// Top [count] people to reach out to. Self and ghosts excluded.
+/// Top [count] people to reach out to. The person whose id is [meId] — you —
+/// is excluded.
 ///
 /// `score = daysSince * (0.55 + closeness * 0.22)`
-List<Nudge> topNudges(DecayModel model, {int count = 3}) {
+List<Nudge> topNudges(DecayModel model, {int count = 3, String meId = ''}) {
   final ranked = <Nudge>[
     for (final p in model.people)
-      if (!p.isMe)
+      if (p.id != meId)
         Nudge(
           person: p,
           days: model.daysOf(p.id),
@@ -233,11 +234,12 @@ List<Nudge> topNudges(DecayModel model, {int count = 3}) {
 const int kGroupSize = 5;
 
 /// Assembles a group of [kGroupSize] around [seed], or around the weakest
-/// person when [seed] is null.
-List<Person> assembleGroup(DecayModel model, {Person? seed}) {
+/// person when [seed] is null. The person whose id is [meId] — you — is never
+/// a candidate.
+List<Person> assembleGroup(DecayModel model, {Person? seed, String meId = ''}) {
   final candidates = [
     for (final p in model.people)
-      if (!p.isMe) p,
+      if (p.id != meId) p,
   ];
   if (candidates.isEmpty) return const [];
 
