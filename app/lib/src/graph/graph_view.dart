@@ -4,7 +4,7 @@ library;
 import 'package:flutter/material.dart' hide Simulation;
 import 'package:flutter/scheduler.dart';
 
-import '../model/models.dart';
+import '../model/models.dart' hide GraphView;
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
 import 'painter.dart';
@@ -15,12 +15,22 @@ const double _zoomMin = 0.4;
 const double _zoomMax = 3.0;
 const double _maxFrame = 0.05;
 
-const _selectionModes = {
-  AppMode.log,
-  AppMode.add,
-  AppMode.group,
-  AppMode.propose,
+/// Modes that are about the plan rather than one person. In these the camera
+/// frames the cluster and every attendee stays lit.
+const _planModes = {
+  AppMode.planTime,
+  AppMode.invitation,
+  AppMode.proposeTime,
+  AppMode.circle,
+  AppMode.planDetail,
+  AppMode.confirm,
 };
+
+/// Modes whose camera follows the focused node.
+const _nodeCameraModes = {AppMode.focus, AppMode.connect};
+
+/// Modes whose camera frames the planned cluster.
+const _clusterCameraModes = {AppMode.circle, AppMode.planDetail};
 
 class GraphView extends StatefulWidget {
   const GraphView({super.key});
@@ -41,6 +51,7 @@ class _GraphViewState extends State<GraphView>
   Offset? _lastCameraTarget;
   double? _lastZoomTarget;
   String? _lastFocusedId;
+  AppMode? _lastMode;
   bool _userCamera = false;
 
   SimNode? _dragging;
@@ -126,17 +137,39 @@ class _GraphViewState extends State<GraphView>
   void _onTapUp(TapUpDetails d, AppState state) {
     _dragging?.pinned = false;
     _dragging = null;
-    final hit = _sim.hitTest(_toWorld(d.localPosition), slop: _worldSlop);
+    final world = _toWorld(d.localPosition);
+    if (_planIconAt(world, state) != null) {
+      state.setMode(AppMode.planDetail);
+      return;
+    }
+    final hit = _sim.hitTest(world, slop: _worldSlop);
     if (hit == null) {
       state.goHome();
       return;
     }
-    if (_selectionModes.contains(state.mode)) {
-      state.toggleSelected(hit.id);
-    } else {
-      state.focusPerson(hit.id);
-      state.setMode(AppMode.focus);
+    state.focusPerson(hit.id);
+  }
+
+  /// The plan badge sits above the node, so it needs its own hit test — the
+  /// node's own circle is too far away to catch it.
+  SimNode? _planIconAt(Offset world, AppState state) {
+    if (state.planIds.isEmpty) return null;
+    if (!world.dx.isFinite || !world.dy.isFinite) return null;
+    final threshold = Tokens.planIconRadius + _worldSlop;
+    SimNode? best;
+    var bestD = double.infinity;
+    for (final n in _sim.nodes) {
+      if (!state.planIds.contains(n.id)) continue;
+      if (state.pendingIds.contains(n.id)) continue;
+      final centre = GraphPainter.planIconCentre(n);
+      if (!centre.dx.isFinite || !centre.dy.isFinite) continue;
+      final dist = (centre - world).distance;
+      if (dist <= threshold && dist < bestD) {
+        best = n;
+        bestD = dist;
+      }
     }
+    return best;
   }
 
   // --- build ----------------------------------------------------------------
@@ -144,16 +177,22 @@ class _GraphViewState extends State<GraphView>
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
+    final planLinkKeys = _planLinkKeys(state);
 
-    _sim.layout = state.layout;
-    _sim.sync(state.people, state.relationships, state.ghosts, state.decay);
+    _sim.view = state.view;
+    _sim.planIds = state.planIds;
+    _sim.pendingIds = state.pendingIds;
+    _sim.planLinkKeys = planLinkKeys;
+    _sim.sync(state.people, state.relationships, state.decay, state.meId);
 
     if (state.cameraTarget != _lastCameraTarget ||
         state.cameraZoom != _lastZoomTarget ||
-        state.focusedPersonId != _lastFocusedId) {
+        state.focusedPersonId != _lastFocusedId ||
+        state.mode != _lastMode) {
       _lastCameraTarget = state.cameraTarget;
       _lastZoomTarget = state.cameraZoom;
       _lastFocusedId = state.focusedPersonId;
+      _lastMode = state.mode;
       _userCamera = false;
     }
     if (!_userCamera) {
@@ -169,7 +208,6 @@ class _GraphViewState extends State<GraphView>
     _dim = Tokens.lerp(_dim, Tokens.dimFor(state.mode.name), Tokens.dimLerp);
 
     final highlighted = _highlighted(state);
-    final invited = _invited(state);
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -192,8 +230,12 @@ class _GraphViewState extends State<GraphView>
               dimOthers: _dim,
               focusedId: state.focusedPersonId,
               t: _sim.time,
-              invitedIds: invited,
-              ghostOpacity: _ghostOpacity(state.mode),
+              planIds: state.planIds,
+              pendingIds: state.pendingIds,
+              planLinkKeys: planLinkKeys,
+              renewingKeys: state.renewingKeys,
+              names: {for (final p in state.people) p.id: p.name},
+              view: state.view,
             ),
           ),
         );
@@ -201,12 +243,29 @@ class _GraphViewState extends State<GraphView>
     );
   }
 
+  /// Every unordered pair of attendees. These are drawn dashed whether or not
+  /// a real relationship exists underneath.
+  Set<String> _planLinkKeys(AppState state) {
+    final ids = state.planIds.toList(growable: false);
+    if (ids.length < 2) return const {};
+    return {
+      for (var i = 0; i < ids.length; i++)
+        for (var j = i + 1; j < ids.length; j++)
+          Relationship.keyFor(ids[i], ids[j]),
+    };
+  }
+
   /// `AppState.cameraTarget` is a per-mode pan only — on its own it leaves the
-  /// focused node wherever it happened to be, often behind the sheet or off
-  /// screen. In focus mode the pan is applied *relative to that node*.
+  /// subject wherever it happened to be, often behind the sheet or off screen.
+  /// The pan is therefore applied *relative to* whatever the mode is about.
   Offset _cameraTargetFor(AppState state) {
     final base = state.cameraTarget;
-    if (state.mode != AppMode.focus) return base;
+    if (state.plan != null && _clusterCameraModes.contains(state.mode)) {
+      final centre = _sim.planCentroid;
+      if (!centre.dx.isFinite || !centre.dy.isFinite) return base;
+      return centre + base;
+    }
+    if (!_nodeCameraModes.contains(state.mode)) return base;
     final id = state.focusedPersonId;
     if (id == null) return base;
     final n = _sim.nodeById(id);
@@ -215,41 +274,18 @@ class _GraphViewState extends State<GraphView>
   }
 
   Set<String> _highlighted(AppState state) {
-    if (state.selectedPersonIds.isNotEmpty) {
-      return state.selectedPersonIds;
-    }
-    if (state.mode == AppMode.nudge) {
-      return {for (final n in state.nudges) n.person.id};
-    }
-    if (state.mode == AppMode.group) {
-      return {for (final p in state.group) p.id};
+    if (state.plan != null && _planModes.contains(state.mode)) {
+      final ids = state.planIds;
+      if (ids.isNotEmpty) return ids;
     }
     final focused = state.focusedPersonId;
     if (focused == null) return const {};
+    final meId = state.meId;
     return {
       focused,
-      ?state.me?.id,
+      if (meId.isNotEmpty) meId,
       for (final r in state.relationships)
         if (r.touches(focused)) ?r.other(focused),
     };
   }
-
-  Set<String> _invited(AppState state) {
-    if (state.invitations.isEmpty) return const {};
-    final profiles = <String>{
-      for (final i in state.invitations)
-        if (i.isPending) ...[i.senderProfileId, ...i.recipientProfileIds],
-    };
-    return {
-      for (final p in state.people)
-        if (p.linkedProfileId != null && profiles.contains(p.linkedProfileId))
-          p.id,
-    };
-  }
-
-  double _ghostOpacity(AppMode mode) => switch (mode) {
-    AppMode.reach => Tokens.ghostOpacityReach,
-    AppMode.focus => Tokens.ghostOpacityFocus,
-    _ => Tokens.ghostOpacity,
-  };
 }

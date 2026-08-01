@@ -1,8 +1,7 @@
-/// Core domain types. Plain, immutable-ish data classes — no codegen.
+/// Core domain types for the demo. Plain data, no codegen, no persistence.
 library;
 
-/// The five seeded contexts. `context` is a free `text` column server-side;
-/// these are seed data, not a constraint.
+/// The five seeded contexts. Used for node colour and the chip label.
 abstract final class Contexts {
   static const family = 'family';
   static const climb = 'climb';
@@ -18,85 +17,92 @@ abstract final class Contexts {
     work => 'WORK',
     uni => 'UNIVERSITY',
     hood => 'NEIGHBOURHOOD',
-    _ => 'UNKNOWN',
+    _ => 'CIRCLE',
   };
 }
 
-/// Everything the app can be doing. A mode is a set of forces and a sheet —
-/// never a route push. There is no [Navigator] in this app.
-enum AppMode {
-  boot,
-  home,
-  focus,
-  log,
-  add,
-  nudge,
-  group,
-  time,
-  reach,
-  invites,
-  propose,
-  pay,
-  name,
+/// Which demo account this phone is. Chosen once on first launch.
+enum Who { calvin, yassie }
+
+extension WhoX on Who {
+  /// The `Person.id` in the shared cast that *is* this account.
+  String get personId => switch (this) {
+    Who.calvin => 'calvin',
+    Who.yassie => 'yassie',
+  };
+
+  String get label => switch (this) {
+    Who.calvin => 'Calvin',
+    Who.yassie => 'Yassie',
+  };
 }
 
-/// The three graph layouts. Same simulation, three force configurations.
-enum GraphLayout { web, orbit, strata }
+/// Everything the app can be doing. A mode is a camera, a set of forces and a
+/// sheet — never a route push.
+enum AppMode {
+  boot,
+  identity,
+  home,
+  focus,
+  planTime,
+  invitation,
+  proposeTime,
+  circle,
+  planDetail,
+  connect,
+  confirm,
+  log,
+}
+
+/// The two graph readings.
+enum GraphView { health, distance }
+
+/// Where one attendee stands on a plan.
+enum Attendance { invited, accepted, declined }
+
+/// Life cycle of the one active plan.
+enum PlanPhase {
+  /// Sent, waiting on at least one attendee.
+  proposed,
+
+  /// Everyone in; the meet-up is upcoming.
+  confirmed,
+
+  /// The morning after: we are asking whether it happened.
+  past,
+
+  /// Confirmed as happened; relationships renewed.
+  renewed,
+
+  /// Called off.
+  cancelled,
+}
 
 class Person {
   const Person({
     required this.id,
     required this.name,
     this.context,
-    this.closeness = 1,
-    this.birthdayDay,
-    this.birthdayMonth,
-    this.metVia,
-    this.linkedProfileId,
-    this.isMe = false,
+    this.closeness = 2,
+    this.city,
+    this.distanceKm = 0,
   });
 
   final String id;
   final String name;
   final String? context;
 
-  /// 1..3, higher is closer.
+  /// 1..3, higher is closer. Drives node radius.
   final int closeness;
 
-  final int? birthdayDay;
-  final int? birthdayMonth;
-  final String? metVia;
+  /// Shown in the distance view only.
+  final String? city;
+  final double distanceKm;
 
-  /// Set when this person is also an account holder you are friend-linked to.
-  final String? linkedProfileId;
-  final bool isMe;
-
-  Person copyWith({String? name, String? context, int? closeness}) => Person(
-    id: id,
-    name: name ?? this.name,
-    context: context ?? this.context,
-    closeness: closeness ?? this.closeness,
-    birthdayDay: birthdayDay,
-    birthdayMonth: birthdayMonth,
-    metVia: metVia,
-    linkedProfileId: linkedProfileId,
-    isMe: isMe,
-  );
-
-  static Person fromMap(Map<String, dynamic> m) => Person(
-    id: m['id'] as String,
-    name: (m['name'] as String?) ?? '',
-    context: m['context'] as String?,
-    closeness: (m['closeness'] as num?)?.toInt() ?? 1,
-    birthdayDay: (m['birthday_day'] as num?)?.toInt(),
-    birthdayMonth: (m['birthday_month'] as num?)?.toInt(),
-    metVia: m['met_via'] as String?,
-    linkedProfileId: m['linked_profile_id'] as String?,
-    isMe: (m['is_me'] as bool?) ?? false,
-  );
+  String get initial => name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();
 }
 
-/// An undirected edge between two people in *your* graph.
+/// An undirected edge between two people. Order-independent [key].
 class Relationship {
   const Relationship({
     required this.id,
@@ -108,13 +114,10 @@ class Relationship {
   final String aPersonId;
   final String bPersonId;
 
-  /// Stable key independent of endpoint order.
-  String get key {
-    final (a, b) = aPersonId.compareTo(bPersonId) < 0
-        ? (aPersonId, bPersonId)
-        : (bPersonId, aPersonId);
-    return '$a|$b';
-  }
+  static String keyFor(String a, String b) =>
+      a.compareTo(b) < 0 ? '$a|$b' : '$b|$a';
+
+  String get key => keyFor(aPersonId, bPersonId);
 
   bool touches(String personId) =>
       personId == aPersonId || personId == bPersonId;
@@ -124,15 +127,9 @@ class Relationship {
       : personId == bPersonId
       ? aPersonId
       : null;
-
-  static Relationship fromMap(Map<String, dynamic> m) => Relationship(
-    id: m['id'] as String,
-    aPersonId: m['a_person_id'] as String,
-    bPersonId: m['b_person_id'] as String,
-  );
 }
 
-/// A meet-up: who, when, optionally where.
+/// A real-world meet-up: who, when, optionally where.
 class Event {
   const Event({
     required this.id,
@@ -145,101 +142,133 @@ class Event {
   final DateTime occurredOn;
   final String? place;
   final List<String> personIds;
-
-  static Event fromMap(Map<String, dynamic> m, List<String> personIds) => Event(
-    id: m['id'] as String,
-    occurredOn: DateTime.parse(m['occurred_on'] as String),
-    place: m['place'] as String?,
-    personIds: personIds,
-  );
 }
 
-/// Your own account row.
-class Profile {
-  const Profile({
+/// The one active plan. Serialised over the broadcast channel.
+class Plan {
+  const Plan({
     required this.id,
-    this.displayName,
-    this.inviteCode,
-    this.isSubscriber = false,
-  });
-
-  final String id;
-  final String? displayName;
-  final String? inviteCode;
-  final bool isSubscriber;
-
-  Profile copyWith({String? displayName, bool? isSubscriber}) => Profile(
-    id: id,
-    displayName: displayName ?? this.displayName,
-    inviteCode: inviteCode,
-    isSubscriber: isSubscriber ?? this.isSubscriber,
-  );
-
-  static Profile fromMap(Map<String, dynamic> m) => Profile(
-    id: m['id'] as String,
-    displayName: m['display_name'] as String?,
-    inviteCode: m['invite_code'] as String?,
-    isSubscriber: (m['is_subscriber'] as bool?) ?? false,
-  );
-}
-
-/// A friend-linked account, as returned by `friend_graph_summary()`.
-class FriendSummary {
-  const FriendSummary({
-    required this.profileId,
-    required this.displayName,
-    required this.peopleCount,
-    required this.reach,
-  });
-
-  final String profileId;
-  final String displayName;
-  final int peopleCount;
-  final int reach;
-
-  static FriendSummary fromMap(Map<String, dynamic> m) => FriendSummary(
-    profileId: m['profile_id'] as String,
-    displayName: (m['display_name'] as String?) ?? 'SOMEONE',
-    peopleCount: (m['people_count'] as num?)?.toInt() ?? 0,
-    reach: (m['reach'] as num?)?.toInt() ?? 0,
-  );
-}
-
-/// A node in a friend's graph that we are *not* entitled to a name for.
-/// Generated client-side from a count — no per-ghost row ever leaves the
-/// server.
-class Ghost {
-  const Ghost({required this.id, required this.ownerProfileId, this.name});
-
-  final String id;
-  final String ownerProfileId;
-
-  /// Non-null only for a shared connection you are also account-linked to.
-  final String? name;
-
-  bool get isNamed => name != null;
-}
-
-class Invitation {
-  const Invitation({
-    required this.id,
-    required this.senderProfileId,
-    required this.senderName,
-    required this.recipientProfileIds,
+    required this.hostPersonId,
+    required this.when,
     this.place,
-    this.proposedFor,
-    this.state = 'pending',
-    this.myResponse = 'pending',
+    required this.attendees,
+    this.phase = PlanPhase.proposed,
   });
 
   final String id;
-  final String senderProfileId;
-  final String senderName;
-  final List<String> recipientProfileIds;
+  final String hostPersonId;
+  final DateTime when;
   final String? place;
-  final DateTime? proposedFor;
-  final String state;
-  final String myResponse;
 
-  bool get isPending => myResponse == 'pending';
+  /// personId -> where they stand. Always contains the host as accepted.
+  final Map<String, Attendance> attendees;
+  final PlanPhase phase;
+
+  List<String> get attendeeIds => attendees.keys.toList();
+
+  Iterable<String> get acceptedIds => attendees.entries
+      .where((e) => e.value == Attendance.accepted)
+      .map((e) => e.key);
+
+  Iterable<String> get pendingIds => attendees.entries
+      .where((e) => e.value == Attendance.invited)
+      .map((e) => e.key);
+
+  bool get everyoneIn =>
+      attendees.values.every((a) => a == Attendance.accepted);
+
+  Plan copyWith({
+    DateTime? when,
+    String? place,
+    Map<String, Attendance>? attendees,
+    PlanPhase? phase,
+  }) => Plan(
+    id: id,
+    hostPersonId: hostPersonId,
+    when: when ?? this.when,
+    place: place ?? this.place,
+    attendees: attendees ?? this.attendees,
+    phase: phase ?? this.phase,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'host': hostPersonId,
+    'when': when.toIso8601String(),
+    'place': place,
+    'attendees': {for (final e in attendees.entries) e.key: e.value.name},
+    'phase': phase.name,
+  };
+
+  static Plan fromJson(Map<String, dynamic> m) => Plan(
+    id: m['id'] as String,
+    hostPersonId: m['host'] as String,
+    when: DateTime.parse(m['when'] as String),
+    place: m['place'] as String?,
+    attendees: {
+      for (final e in (m['attendees'] as Map).entries)
+        e.key as String: Attendance.values.firstWhere(
+          (a) => a.name == e.value,
+          orElse: () => Attendance.invited,
+        ),
+    },
+    phase: PlanPhase.values.firstWhere(
+      (p) => p.name == m['phase'],
+      orElse: () => PlanPhase.proposed,
+    ),
+  );
+}
+
+/// A consent-based request to turn an indirect connection into a direct one.
+class ConnectionRequest {
+  const ConnectionRequest({
+    required this.fromPersonId,
+    required this.toPersonId,
+    required this.viaPersonId,
+    this.accepted = false,
+  });
+
+  final String fromPersonId;
+  final String toPersonId;
+  final String viaPersonId;
+  final bool accepted;
+
+  String get key => Relationship.keyFor(fromPersonId, toPersonId);
+
+  ConnectionRequest copyWith({bool? accepted}) => ConnectionRequest(
+    fromPersonId: fromPersonId,
+    toPersonId: toPersonId,
+    viaPersonId: viaPersonId,
+    accepted: accepted ?? this.accepted,
+  );
+
+  Map<String, dynamic> toJson() => {
+    'from': fromPersonId,
+    'to': toPersonId,
+    'via': viaPersonId,
+    'accepted': accepted,
+  };
+
+  static ConnectionRequest fromJson(Map<String, dynamic> m) =>
+      ConnectionRequest(
+        fromPersonId: m['from'] as String,
+        toPersonId: m['to'] as String,
+        viaPersonId: m['via'] as String,
+        accepted: (m['accepted'] as bool?) ?? false,
+      );
+}
+
+/// What the in-app banner and the OS notification both render.
+class AppNotification {
+  const AppNotification({
+    required this.title,
+    required this.body,
+    required this.mode,
+  });
+
+  final String title;
+  final String body;
+
+  /// The mode tapping the banner opens.
+  final AppMode mode;
 }

@@ -1,261 +1,610 @@
-/// The single source of truth. One [ChangeNotifier] above one [Stack] — there
-/// is no [Navigator] in this app; a mode change is a change of forces.
+/// The one [ChangeNotifier] the demo runs on: graph, plan, wire and clock.
 library;
 
 import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-import '../data/repository.dart';
+import '../demo/cast.dart';
+import '../demo/channel.dart';
+import '../demo/director.dart';
 import '../model/decay.dart';
 import '../model/models.dart';
+import '../notify/notifications.dart';
 import '../theme/tokens.dart';
 
-/// Longest look back the time scrubber allows.
-const double kMaxTimeOffsetDays = 540;
+/// A freshly consented connection starts neutral, not warm: this many days
+/// back is decay ~0.57 with the default horizon.
+const int _newEdgeSeedDays = 120;
 
-/// Per-mode camera targets from the design: `{zoom, panY}`. `panX` is always 0.
-/// Belongs in `Tokens` once the orchestrator folds it in.
-const kCameraByMode = <AppMode, (double, double)>{
-  AppMode.boot: (0.5, 0),
-  AppMode.name: (0.5, 0),
-  AppMode.home: (0.78, 0),
-  AppMode.focus: (1.42, 172),
-  AppMode.nudge: (0.5, 205),
-  AppMode.group: (1.0, 172),
-  AppMode.log: (0.9, 88),
-  AppMode.add: (0.9, 86),
-  AppMode.time: (0.66, 116),
-  AppMode.reach: (0.44, 250),
-  AppMode.invites: (0.62, 200),
-  AppMode.propose: (0.98, 150),
-  AppMode.pay: (0.5, 240),
+/// Phases whose attendees still wear a plan ring in the graph.
+const Set<PlanPhase> _ringPhases = {
+  PlanPhase.proposed,
+  PlanPhase.confirmed,
+  PlanPhase.past,
+};
+
+/// Modes that only make sense while a plan exists.
+const Set<AppMode> _planModes = {
+  AppMode.invitation,
+  AppMode.proposeTime,
+  AppMode.circle,
+  AppMode.planDetail,
+  AppMode.confirm,
 };
 
 class AppState extends ChangeNotifier {
-  AppState(this._repo);
-
-  final GraphRepository _repo;
+  AppState() {
+    _channel = DemoChannel(onEvent: _onRemote);
+    _seedEvents = buildEvents(_bootNow);
+    _refreshGraph();
+  }
 
   // --- lifecycle ------------------------------------------------------------
 
+  final DateTime _bootNow = DateTime.now();
+  late final DemoChannel _channel;
+  final Director _director = Director();
+
   bool _isBooting = true;
-  String? _bootError;
-  bool _needsName = false;
+  bool _disposed = false;
 
   bool get isBooting => _isBooting;
-  String? get bootError => _bootError;
-  bool get needsName => _needsName;
 
+  /// Builds the graph and hands control to the identity sheet. Identity is not
+  /// persisted — the demo picks a side on every launch — so this never touches
+  /// disk and never blocks on the network.
   Future<void> boot() async {
-    _isBooting = true;
-    _bootError = null;
-    notifyListeners();
-    try {
-      _profile = await _repo.signInAndEnsureProfile();
-      if (await _repo.isEmpty()) {
-        await _repo.seedFixture();
-      }
-      await _loadGraph();
-      final name = _profile?.displayName;
-      _needsName = name == null || name.trim().isEmpty;
-      _mode = _needsName ? AppMode.name : AppMode.home;
-      _isBooting = false;
-      notifyListeners();
-      unawaited(_loadSocial());
-      _invitationSub = _repo.watchInvitations().listen((v) {
-        _invitations = v;
-        notifyListeners();
-      }, onError: (_) {});
-    } catch (e) {
-      _bootError = '$e';
-      _isBooting = false;
-      notifyListeners();
-    }
+    _seedEvents = buildEvents(_bootNow);
+    _refreshGraph();
+    _isBooting = false;
+    _mode = _who == null ? AppMode.identity : AppMode.home;
+    _notify();
   }
+
+  // --- identity -------------------------------------------------------------
+
+  Who? _who;
+
+  Who? get who => _who;
+
+  String get meId => _who?.personId ?? '';
+
+  Person? get me => meId.isEmpty ? null : personById(meId);
+
+  Future<void> chooseWho(Who w) async {
+    _who = w;
+    _mode = AppMode.home;
+    _focusedPersonId = null;
+    _refreshGraph();
+    _notify();
+    try {
+      await _channel.join(w.personId);
+    } catch (_) {
+      // A dead socket is not an error: the demo still runs solo.
+    }
+    _notify();
+  }
+
+  bool get channelConnected => _channel.isConnected;
 
   // --- data -----------------------------------------------------------------
 
-  Profile? _profile;
-  List<Person> _people = const [];
-  List<Relationship> _relationships = const [];
-  List<Event> _events = const [];
-  List<Ghost> _ghosts = const [];
-  List<Invitation> _invitations = const [];
-  List<FriendSummary> _friends = const [];
+  late List<Event> _seedEvents;
+  final List<Event> _liveEvents = [];
+  final List<Relationship> _liveEdges = [];
 
-  Profile? get profile => _profile;
-  List<Person> get people => _people;
+  late List<Event> _events;
+  late List<Relationship> _relationships;
+  late DecayModel _decay;
+
+  List<Person> get people => kCast;
   List<Relationship> get relationships => _relationships;
   List<Event> get events => _events;
-  List<Ghost> get ghosts => _ghosts;
-  List<Invitation> get invitations => _invitations;
-  List<FriendSummary> get friends => _friends;
-
-  Person? get me {
-    for (final p in _people) {
-      if (p.isMe) return p;
-    }
-    return null;
-  }
+  DecayModel get decay => _decay;
 
   Person? personById(String id) {
-    for (final p in _people) {
+    for (final p in kCast) {
       if (p.id == id) return p;
     }
     return null;
   }
 
-  late DecayModel _decay = _buildDecay();
-  DecayModel get decay => _decay;
+  bool isMe(String id) => meId.isNotEmpty && id == meId;
 
-  DecayModel _buildDecay() => DecayModel(
-    now: now,
-    people: _people,
-    relationships: _relationships,
-    events: _events,
-    perPersonHorizon: Tokens.perPersonHorizon,
-  );
+  /// The demo clock. [advanceToMorningAfter] moves it.
+  DateTime get now => DateTime.now().add(_clockOffset);
 
-  void _rebuildDecay() {
-    _decay = _buildDecay();
-    _group = null;
+  Duration _clockOffset = Duration.zero;
+
+  /// How far the demo clock has been pushed. Travels over the wire so both
+  /// phones age the same graph.
+  Duration get clockOffset => _clockOffset;
+
+  void _refreshGraph() {
+    _events = [..._seedEvents, ..._liveEvents];
+    _relationships = [...kEdges, ..._liveEdges];
+    _decay = DecayModel(
+      now: now,
+      people: kCast,
+      relationships: _relationships,
+      events: _events,
+      perPersonHorizon: Tokens.perPersonHorizon,
+    );
   }
 
-  Future<void> _loadGraph() async {
-    final snap = await _repo.loadGraph();
-    _profile = snap.profile;
-    _people = snap.people;
-    _relationships = snap.relationships;
-    _events = snap.events;
-    _rebuildDecay();
+  // --- graph view -----------------------------------------------------------
+
+  GraphView _view = GraphView.health;
+  bool _locationGranted = false;
+
+  GraphView get view => _view;
+  bool get locationGranted => _locationGranted;
+
+  void setView(GraphView v) {
+    if (_view == v) return;
+    _view = v;
+    _notify();
   }
 
-  Future<void> _loadSocial() async {
-    try {
-      _friends = await _repo.friendSummaries();
-      _invitations = await _repo.loadInvitations();
-      notifyListeners();
-    } catch (_) {}
+  void grantLocation() {
+    if (_locationGranted) return;
+    _locationGranted = true;
+    _notify();
   }
 
-  // --- mode machine ---------------------------------------------------------
+  // --- mode -----------------------------------------------------------------
 
   AppMode _mode = AppMode.boot;
-  GraphLayout _layout = GraphLayout.web;
+  String? _focusedPersonId;
 
   AppMode get mode => _mode;
-  GraphLayout get layout => _layout;
-
-  static const _selectionModes = {
-    AppMode.log,
-    AppMode.add,
-    AppMode.group,
-    AppMode.propose,
-  };
+  String? get focusedPersonId => _focusedPersonId;
 
   void setMode(AppMode m) {
     if (_mode == m) return;
-
     _mode = m;
-    // Pre-seed on "who is focused", not "which mode we came from": WE MET UP
-    // has to work whether focus was entered by tapping the node or by the
-    // nudge list jumping straight into log.
-    if (_selectionModes.contains(m) && _focusedPersonId != null) {
-      _selectedPersonIds
-        ..clear()
-        ..add(_focusedPersonId!);
-    }
-    if (m == AppMode.group) {
-      assembleGroupFrom(
-        _focusedPersonId == null ? null : personById(_focusedPersonId!),
-      );
-      return;
-    }
-    notifyListeners();
+    _notify();
   }
 
   void goHome() {
-    _mode = AppMode.home;
+    _mode = _who == null ? AppMode.identity : AppMode.home;
     _focusedPersonId = null;
-    _selectedPersonIds.clear();
-    notifyListeners();
+    _notify();
   }
-
-  void setLayout(GraphLayout l) {
-    if (_layout == l) return;
-    _layout = l;
-    notifyListeners();
-  }
-
-  // --- selection ------------------------------------------------------------
-
-  String? _focusedPersonId;
-  final Set<String> _selectedPersonIds = {};
-
-  String? get focusedPersonId => _focusedPersonId;
-  Set<String> get selectedPersonIds => _selectedPersonIds;
 
   void focusPerson(String? id) {
     _focusedPersonId = id;
-    if (id != null) {
-      if (_mode == AppMode.home || _mode == AppMode.focus) {
+    if (_mode != AppMode.boot && _mode != AppMode.identity) {
+      if (id == null) {
+        if (_mode == AppMode.focus || _mode == AppMode.connect) {
+          _mode = AppMode.home;
+        }
+      } else {
         _mode = AppMode.focus;
       }
-    } else if (_mode == AppMode.focus) {
-      _mode = AppMode.home;
     }
-    notifyListeners();
+    _notify();
   }
 
-  void toggleSelected(String id) {
-    if (!_selectedPersonIds.remove(id)) _selectedPersonIds.add(id);
-    notifyListeners();
+  (double, double) get _camera =>
+      Tokens.cameraByMode[_mode] ?? const (0.8, 0.0);
+
+  double get cameraZoom => _camera.$1;
+
+  Offset get cameraTarget => Offset(0, _camera.$2);
+
+  // --- relationship helpers -------------------------------------------------
+
+  Set<String> _neighboursOf(String personId) {
+    final out = <String>{};
+    if (personId.isEmpty) return out;
+    for (final r in _relationships) {
+      final other = r.other(personId);
+      if (other != null) out.add(other);
+    }
+    return out;
   }
 
-  void clearSelection() {
-    _selectedPersonIds.clear();
-    notifyListeners();
+  bool isDirectlyConnected(String personId) {
+    if (meId.isEmpty || personId == meId) return false;
+    for (final r in _relationships) {
+      if (r.other(meId) == personId) return true;
+    }
+    return false;
   }
 
-  // --- time scrubber --------------------------------------------------------
-
-  double _timeOffsetDays = 0;
-  double get timeOffsetDays => _timeOffsetDays;
-
-  DateTime get now =>
-      DateTime.now().subtract(Duration(days: _timeOffsetDays.round()));
-
-  void setTimeOffsetDays(double d) {
-    final v = d.clamp(0.0, kMaxTimeOffsetDays);
-    if (v == _timeOffsetDays) return;
-    _timeOffsetDays = v;
-    _rebuildDecay();
-    notifyListeners();
+  Person? mutualFor(String personId) {
+    if (meId.isEmpty || personId == meId) return null;
+    final mine = _neighboursOf(meId);
+    final theirs = _neighboursOf(personId);
+    for (final p in kCast) {
+      if (p.id == meId || p.id == personId) continue;
+      if (mine.contains(p.id) && theirs.contains(p.id)) return p;
+    }
+    return null;
   }
 
-  // --- derived --------------------------------------------------------------
-
-  List<Nudge> get nudges => topNudges(_decay, count: 3);
-
-  List<Person>? _group;
-  List<Person> get group => _group ??= assembleGroup(_decay);
-
-  void assembleGroupFrom(Person? seed) {
-    _group = assembleGroup(_decay, seed: seed);
-    notifyListeners();
+  List<Person> get indirectPeople {
+    if (meId.isEmpty) return const [];
+    final mine = _neighboursOf(meId);
+    return [
+      for (final p in kCast)
+        if (p.id != meId && !mine.contains(p.id))
+          if (_neighboursOf(p.id).any(mine.contains)) p,
+    ];
   }
 
-  int get pendingInvitationCount =>
-      _invitations.where((i) => i.isPending).length;
+  List<Person> get directPeople {
+    if (meId.isEmpty) return const [];
+    final mine = _neighboursOf(meId);
+    return [
+      for (final p in kCast)
+        if (mine.contains(p.id)) p,
+    ];
+  }
 
-  bool get isSubscriber => _profile?.isSubscriber ?? false;
+  // --- the plan -------------------------------------------------------------
 
-  // --- camera ---------------------------------------------------------------
+  Plan? _plan;
 
-  double get cameraZoom => kCameraByMode[_mode]!.$1;
+  Plan? get plan => _plan;
 
-  Offset get cameraTarget => Offset(0, kCameraByMode[_mode]!.$2);
+  bool get hasIncomingInvitation {
+    final p = _plan;
+    if (p == null || meId.isEmpty) return false;
+    return p.attendees[meId] == Attendance.invited;
+  }
+
+  Attendance? attendanceOf(String personId) => _plan?.attendees[personId];
+
+  Set<String> get planIds {
+    final p = _plan;
+    if (p == null || !_ringPhases.contains(p.phase)) return const {};
+    return p.attendees.keys.toSet();
+  }
+
+  Set<String> get pendingIds {
+    final p = _plan;
+    if (p == null || !_ringPhases.contains(p.phase)) return const {};
+    return p.pendingIds.toSet();
+  }
+
+  void proposePlan({
+    required String withPersonId,
+    required DateTime when,
+    String? place,
+  }) {
+    if (meId.isEmpty || withPersonId == meId) return;
+    final next = Plan(
+      id: 'plan-${DateTime.now().millisecondsSinceEpoch}',
+      hostPersonId: meId,
+      when: when,
+      place: place,
+      attendees: {meId: Attendance.accepted, withPersonId: Attendance.invited},
+    );
+    _plan = next;
+    _mode = AppMode.home;
+    _focusedPersonId = null;
+    _sendPlan(next);
+    showToast('Invitation on its way to ${_nameOf(withPersonId)}.');
+  }
+
+  void acceptPlan() {
+    final p = _plan;
+    if (p == null || meId.isEmpty) return;
+    if (!p.attendees.containsKey(meId)) return;
+    final attendees = {...p.attendees, meId: Attendance.accepted};
+    final next = p.copyWith(
+      attendees: attendees,
+      phase: _phaseAfter(p, attendees),
+    );
+    _plan = next;
+    _clearBanner();
+    _sendPlan(next);
+    _mode = AppMode.circle;
+    _notify();
+  }
+
+  void proposeAlternateTime(DateTime when) {
+    final p = _plan;
+    if (p == null) return;
+    final attendees = {...p.attendees};
+    if (meId.isNotEmpty && attendees.containsKey(meId)) {
+      attendees[meId] = Attendance.accepted;
+    }
+    final next = p.copyWith(
+      when: when,
+      attendees: attendees,
+      phase: _phaseAfter(p, attendees),
+    );
+    _plan = next;
+    _clearBanner();
+    _sendPlan(next);
+    _mode = AppMode.home;
+    _focusedPersonId = null;
+    showToast('Your suggestion is on its way.');
+  }
+
+  void addToPlan(String personId) {
+    final p = _plan;
+    if (p == null || personId == meId) return;
+    if (p.attendees.containsKey(personId)) return;
+    final attendees = {...p.attendees, personId: Attendance.invited};
+    final next = p.copyWith(
+      attendees: attendees,
+      phase: _phaseAfter(p, attendees),
+    );
+    _plan = next;
+    _sendPlan(next);
+    _notify();
+    _director.scheduleAccept(personId, () => _autoAcceptPlan(personId));
+  }
+
+  void _autoAcceptPlan(String personId) {
+    final p = _plan;
+    if (p == null) return;
+    if (p.attendees[personId] != Attendance.invited) return;
+    final attendees = {...p.attendees, personId: Attendance.accepted};
+    final next = p.copyWith(
+      attendees: attendees,
+      phase: _phaseAfter(p, attendees),
+    );
+    _plan = next;
+    _sendPlan(next);
+    showToast('${_nameOf(personId)} is in.');
+  }
+
+  void cancelPlan() {
+    final p = _plan;
+    if (p == null) return;
+    _sendPlan(p.copyWith(phase: PlanPhase.cancelled));
+    _plan = null;
+    _director.cancelAll();
+    if (_planModes.contains(_mode)) _mode = AppMode.home;
+    _focusedPersonId = null;
+    showToast('Plan called off.');
+  }
+
+  void reschedulePlan(DateTime when) {
+    final p = _plan;
+    if (p == null) return;
+    final next = p.copyWith(when: when);
+    _plan = next;
+    _sendPlan(next);
+    showToast('Moved. Everyone sees the new time.');
+  }
+
+  PlanPhase _phaseAfter(Plan p, Map<String, Attendance> attendees) {
+    if (p.phase == PlanPhase.past ||
+        p.phase == PlanPhase.renewed ||
+        p.phase == PlanPhase.cancelled) {
+      return p.phase;
+    }
+    final everyoneIn = attendees.values.every((a) => a == Attendance.accepted);
+    return everyoneIn ? PlanPhase.confirmed : PlanPhase.proposed;
+  }
+
+  // --- confirmation ---------------------------------------------------------
+
+  bool get awaitingConfirmation => _plan?.phase == PlanPhase.past;
+
+  void confirmMeetupHappened() {
+    final p = _plan;
+    if (p == null) return;
+    final next = p.copyWith(phase: PlanPhase.renewed);
+    _plan = next;
+    _applyRenewal(next);
+    _sendPlan(next);
+    _mode = AppMode.home;
+    _focusedPersonId = null;
+    _notify();
+  }
+
+  void declineMeetupHappened() {
+    final p = _plan;
+    if (p == null) return;
+    _sendPlan(p.copyWith(phase: PlanPhase.cancelled));
+    _plan = null;
+    if (_planModes.contains(_mode)) _mode = AppMode.home;
+    _focusedPersonId = null;
+    showToast('Noted. Nothing changed in your graph.');
+  }
+
+  void _applyRenewal(Plan p) {
+    final attendees = p.acceptedIds.toList();
+    if (attendees.length >= 2) {
+      _liveEvents.add(
+        Event(
+          id: 'met-${DateTime.now().millisecondsSinceEpoch}',
+          occurredOn: now,
+          place: p.place,
+          personIds: attendees,
+        ),
+      );
+      _refreshGraph();
+    }
+    _pulse(pairKeysAmong(attendees).toSet());
+    _renewedTimer?.cancel();
+    _renewedMessage = 'Connection renewed';
+    _renewedTimer = Timer(Tokens.renewedDwell, () {
+      _renewedMessage = null;
+      _notify();
+    });
+  }
+
+  void logMeetup({required List<String> personIds, required DateTime on}) {
+    final ids = <String>{
+      if (meId.isNotEmpty) meId,
+      ...personIds.where((id) => id.isNotEmpty),
+    }.toList();
+    if (ids.length < 2) {
+      showToast('Pick at least one person.');
+      return;
+    }
+    _liveEvents.add(
+      Event(
+        id: 'log-${DateTime.now().millisecondsSinceEpoch}',
+        occurredOn: on,
+        personIds: ids,
+      ),
+    );
+    _refreshGraph();
+    _pulse(pairKeysAmong(ids).toSet());
+    _mode = AppMode.home;
+    _focusedPersonId = null;
+    final names = [
+      for (final id in ids)
+        if (id != meId) _nameOf(id),
+    ];
+    showToast(
+      names.length == 1
+          ? '${names.first} is lit up again.'
+          : '${_joinNames(names)} are lit up again.',
+    );
+  }
+
+  // --- consent-based connection ---------------------------------------------
+
+  final List<ConnectionRequest> _requests = [];
+
+  List<ConnectionRequest> get connectionRequests =>
+      List<ConnectionRequest>.unmodifiable(_requests);
+
+  bool isConnectionPending(String personId) {
+    if (meId.isEmpty) return false;
+    final key = Relationship.keyFor(meId, personId);
+    return _requests.any((r) => !r.accepted && r.key == key);
+  }
+
+  void requestConnection(String personId) {
+    if (meId.isEmpty) {
+      _refuseConnection('Pick who you are first.');
+      return;
+    }
+    if (personId == meId) {
+      _refuseConnection('That one is you.');
+      return;
+    }
+    if (isDirectlyConnected(personId)) {
+      _refuseConnection('You and ${_nameOf(personId)} are already connected.');
+      return;
+    }
+    if (isConnectionPending(personId)) {
+      _refuseConnection('${_nameOf(personId)} already has your request.');
+      return;
+    }
+    final via = mutualFor(personId);
+    final request = ConnectionRequest(
+      fromPersonId: meId,
+      toPersonId: personId,
+      viaPersonId: via?.id ?? '',
+    );
+    _requests.add(request);
+    _send('connection', {'request': request.toJson()});
+    _mode = AppMode.home;
+    _focusedPersonId = null;
+    showToast('Request sent to ${_nameOf(personId)}.');
+    _director.scheduleConnectionAccept(
+      personId,
+      () => _autoAcceptConnection(personId),
+    );
+  }
+
+  /// A refusal still has to move: a sheet that sits there reads as broken.
+  void _refuseConnection(String message) {
+    _mode = _who == null ? AppMode.identity : AppMode.home;
+    _focusedPersonId = null;
+    showToast(message);
+  }
+
+  void _autoAcceptConnection(String personId) {
+    if (meId.isEmpty) return;
+    final key = Relationship.keyFor(meId, personId);
+    final i = _requests.indexWhere((r) => r.key == key);
+    if (i < 0 || _requests[i].accepted) return;
+    final accepted = _requests[i].copyWith(accepted: true);
+    _requests[i] = accepted;
+    _addLiveEdge(accepted.fromPersonId, accepted.toPersonId);
+    _send('connection', {'request': accepted.toJson()});
+    showToast('${_nameOf(personId)} accepted. You are connected.');
+  }
+
+  void _addLiveEdge(String a, String b) {
+    if (a.isEmpty || b.isEmpty || a == b) return;
+    final key = Relationship.keyFor(a, b);
+    if (_relationships.any((r) => r.key == key)) return;
+    _liveEdges.add(Relationship(id: 'live-$key', aPersonId: a, bPersonId: b));
+    _liveEvents.add(
+      Event(
+        id: 'neutral-$key',
+        occurredOn: now.subtract(const Duration(days: _newEdgeSeedDays)),
+        personIds: [a, b],
+      ),
+    );
+    _refreshGraph();
+    _pulse({key});
+  }
+
+  // --- celebration / renew animation ----------------------------------------
+
+  Set<String> _renewingKeys = const {};
+  String? _renewedMessage;
+  Timer? _renewTimer;
+  Timer? _renewedTimer;
+
+  Set<String> get renewingKeys => _renewingKeys;
+  String? get renewedMessage => _renewedMessage;
+
+  void _pulse(Set<String> keys) {
+    if (keys.isEmpty) return;
+    _renewTimer?.cancel();
+    _renewingKeys = keys;
+    _renewTimer = Timer(Tokens.renewAnimation, () {
+      _renewingKeys = const {};
+      _notify();
+    });
+  }
+
+  // --- notification banner --------------------------------------------------
+
+  AppNotification? _banner;
+  Timer? _bannerTimer;
+
+  AppNotification? get banner => _banner;
+
+  void dismissBanner() {
+    if (_banner == null) return;
+    _clearBanner();
+    _notify();
+  }
+
+  void tapBanner() {
+    final b = _banner;
+    _clearBanner();
+    if (b != null) _mode = b.mode;
+    _notify();
+  }
+
+  void _clearBanner() {
+    _bannerTimer?.cancel();
+    _bannerTimer = null;
+    _banner = null;
+  }
+
+  void _showBanner(AppNotification n) {
+    _bannerTimer?.cancel();
+    _banner = n;
+    _bannerTimer = Timer(Tokens.bannerDwell, () {
+      _banner = null;
+      _notify();
+    });
+  }
+
+  void _alert(String title, String body, AppMode mode) {
+    unawaited(Notifications.show(title, body));
+    _showBanner(AppNotification(title: title, body: body, mode: mode));
+  }
 
   // --- toast ----------------------------------------------------------------
 
@@ -267,196 +616,265 @@ class AppState extends ChangeNotifier {
   void showToast(String message) {
     _toastTimer?.cancel();
     _toast = message;
-    notifyListeners();
+    _notify();
     _toastTimer = Timer(Tokens.toastDuration, () {
       _toast = null;
-      notifyListeners();
+      _notify();
     });
   }
 
-  // --- actions --------------------------------------------------------------
+  // --- demo controls --------------------------------------------------------
 
-  Future<void> setDisplayName(String name) async {
-    try {
-      _profile = await _repo.setDisplayName(name.trim());
-      _needsName = false;
-      _mode = AppMode.home;
-      notifyListeners();
-    } catch (_) {
-      showToast('Could not save that name.');
-    }
+  bool _demoPanelOpen = false;
+
+  bool get demoPanelOpen => _demoPanelOpen;
+
+  void toggleDemoPanel() {
+    _demoPanelOpen = !_demoPanelOpen;
+    _notify();
   }
 
-  Future<void> addPerson({
-    required String name,
-    String? context,
-    int closeness = 1,
-    required List<String> knownByPersonIds,
-  }) async {
-    try {
-      await _repo.addPerson(
-        name: name.trim(),
-        context: context,
-        closeness: closeness,
-        knownByPersonIds: knownByPersonIds,
-      );
-      await _loadGraph();
-      _selectedPersonIds.clear();
-      _mode = AppMode.home;
-      notifyListeners();
-      final n = knownByPersonIds.length;
-      showToast('${name.trim()} is in the graph with $n ties.');
-    } catch (_) {
-      showToast('Could not add them.');
-    }
-  }
-
-  Future<void> logMeetUp({
-    required DateTime occurredOn,
-    required List<String> personIds,
-    String? place,
-  }) async {
-    try {
-      await _repo.logEvent(
-        occurredOn: occurredOn,
-        personIds: personIds,
-        place: place,
-      );
-      await _loadGraph();
-      final names = [for (final id in personIds) ?personById(id)?.name];
-      _selectedPersonIds.clear();
-      _focusedPersonId = null;
-      _mode = AppMode.home;
-      notifyListeners();
-      if (names.isNotEmpty) {
-        showToast(
-          names.length == 1
-              ? '${names.first} is lit up again.'
-              : '${_joinNames(names)} are lit up again.',
-        );
-      }
-    } catch (_) {
-      showToast('Could not log that.');
-    }
-  }
-
-  Future<void> redeemInviteCode(String code) async {
-    try {
-      await _repo.redeemInviteCode(code.trim());
-      await _loadSocial();
-    } catch (_) {
-      showToast('That code did not work.');
-    }
-  }
-
-  /// Pulls a friend's graph in as anonymous ghosts.
-  Future<void> mergeFriendGraph(String friendProfileId) async {
-    try {
-      _ghosts = [
-        ..._ghosts.where((g) => g.ownerProfileId != friendProfileId),
-        ...await _repo.sharedPeople(friendProfileId),
-      ];
-      notifyListeners();
-    } catch (_) {
-      showToast('Could not merge that graph.');
-    }
-  }
-
-  List<String>? _interruptedRecipients;
-  String? _interruptedPlace;
-  DateTime? _interruptedFor;
-
-  Future<void> propose({
-    required List<String> recipientProfileIds,
-    String? place,
-    DateTime? proposedFor,
-  }) async {
-    if (!isSubscriber) {
-      _interruptedRecipients = List.of(recipientProfileIds);
-      _interruptedPlace = place;
-      _interruptedFor = proposedFor;
-      _mode = AppMode.pay;
-      notifyListeners();
-      showToast('Proposing is part of 8x Live.');
+  void advanceToMorningAfter() {
+    final p = _plan;
+    if (p == null) {
+      showToast('There is no plan to advance yet.');
       return;
     }
+    final morning = DateTime(
+      p.when.year,
+      p.when.month,
+      p.when.day,
+      9,
+    ).add(const Duration(days: 1));
+    _clockOffset = morning.difference(DateTime.now());
+    final next = p.copyWith(phase: PlanPhase.past);
+    _plan = next;
+    _demoPanelOpen = false;
+    _refreshGraph();
+    _send('clock', {'ms': _clockOffset.inMilliseconds});
+    _sendPlan(next);
+    _askDidItHappen(next);
+    _notify();
+  }
+
+  void _askDidItHappen(Plan p) {
+    final names = _joinNames([
+      for (final id in p.attendeeIds)
+        if (id != meId) _nameOf(id),
+    ]);
+    _alert(
+      'Did you meet up?',
+      'Yesterday with $names. Tap to confirm.',
+      AppMode.confirm,
+    );
+  }
+
+  void resetDemo() {
+    _send('reset', const {});
+    _applyReset();
+    showToast('Back to the start.');
+  }
+
+  void _applyReset() {
+    _director.cancelAll();
+    _renewTimer?.cancel();
+    _renewedTimer?.cancel();
+    _clearBanner();
+    _plan = null;
+    _requests.clear();
+    _liveEdges.clear();
+    _liveEvents.clear();
+    _clockOffset = Duration.zero;
+    _renewingKeys = const {};
+    _renewedMessage = null;
+    _focusedPersonId = null;
+    _demoPanelOpen = false;
+    _locationGranted = false;
+    _view = GraphView.health;
+    _refreshGraph();
+    _mode = _who == null ? AppMode.identity : AppMode.home;
+    _notify();
+  }
+
+  void nudgeDirector() {
+    _director.flush();
+    _notify();
+  }
+
+  // --- the wire -------------------------------------------------------------
+
+  void _send(String type, Map<String, dynamic> payload) {
     try {
-      await _repo.propose(
-        recipientProfileIds: recipientProfileIds,
-        place: place,
-        proposedFor: proposedFor,
-      );
-      _invitations = await _repo.loadInvitations();
-      final names = [
-        for (final id in recipientProfileIds)
-          ?_friends
-              .where((f) => f.profileId == id)
-              .map((f) => f.displayName)
-              .firstOrNull,
-      ];
-      _selectedPersonIds.clear();
-      _mode = AppMode.home;
-      notifyListeners();
-      showToast('Invitation on its way to ${_joinNames(names)}.');
+      _channel.send(type, payload);
     } catch (_) {
-      showToast('Could not send that invitation.');
+      // Offline is a supported state.
     }
   }
 
-  Future<void> acceptInvitation(String id) async {
-    try {
-      await _repo.acceptInvitation(id);
-      _invitations = await _repo.loadInvitations();
-      notifyListeners();
-      final place = _invitations
-          .where((i) => i.id == id)
-          .map((i) => i.place)
-          .firstOrNull;
-      showToast(place == null ? 'You’re in.' : 'You’re in. $place.');
-    } catch (_) {
-      showToast('Could not answer that.');
-    }
-  }
+  void _sendPlan(Plan p) => _send('plan', {'plan': p.toJson()});
 
-  Future<void> goLive() async {
+  void _onRemote(String type, Map<String, dynamic> payload) {
     try {
-      _profile = await _repo.setSubscriber(true);
-      notifyListeners();
-      showToast('You’re live. Your graph can reach back now.');
-      final pending = _interruptedRecipients;
-      if (pending != null) {
-        _interruptedRecipients = null;
-        _mode = AppMode.propose;
-        notifyListeners();
-        await propose(
-          recipientProfileIds: pending,
-          place: _interruptedPlace,
-          proposedFor: _interruptedFor,
-        );
-      } else {
-        _mode = AppMode.home;
-        notifyListeners();
+      switch (type) {
+        case 'plan':
+          final rawPlan = payload['plan'];
+          if (rawPlan is Map) {
+            _applyRemotePlan(Plan.fromJson(Map<String, dynamic>.from(rawPlan)));
+          }
+        case 'connection':
+          final rawRequest = payload['request'];
+          if (rawRequest is Map) {
+            _applyRemoteRequest(
+              ConnectionRequest.fromJson(Map<String, dynamic>.from(rawRequest)),
+            );
+          }
+        case 'clock':
+          final ms = payload['ms'];
+          if (ms is num) {
+            _clockOffset = Duration(milliseconds: ms.toInt());
+            _refreshGraph();
+            _notify();
+          }
+        case 'reset':
+          _applyReset();
       }
     } catch (_) {
-      showToast('Could not go live.');
+      // A malformed message must never reach the stage.
     }
   }
 
-  Future<void> reseed() async {
-    try {
-      await _repo.reseed();
-      await _loadGraph();
-      _selectedPersonIds.clear();
-      _focusedPersonId = null;
-      _timeOffsetDays = 0;
-      _rebuildDecay();
-      _mode = AppMode.home;
-      notifyListeners();
-      showToast('Graph reseeded.');
-    } catch (_) {
-      showToast('Could not reseed.');
+  void _applyRemotePlan(Plan incoming) {
+    final prev = _plan;
+
+    if (incoming.phase == PlanPhase.cancelled) {
+      if (prev == null) return;
+      _plan = null;
+      _director.cancelAll();
+      if (_planModes.contains(_mode)) _mode = AppMode.home;
+      showToast('The plan was called off.');
+      return;
     }
+
+    final isNew = prev == null || prev.id != incoming.id;
+    final changed =
+        prev == null ||
+        prev.id != incoming.id ||
+        prev.when != incoming.when ||
+        prev.place != incoming.place ||
+        prev.phase != incoming.phase ||
+        !_sameAttendance(prev.attendees, incoming.attendees);
+    if (!changed) return;
+
+    _plan = incoming;
+
+    if (isNew && incoming.attendees[meId] == Attendance.invited) {
+      _alert(
+        '${_nameOf(incoming.hostPersonId)} wants to see you',
+        '${_humanWhen(incoming.when)} · tap to answer',
+        AppMode.invitation,
+      );
+      _notify();
+      return;
+    }
+
+    if (incoming.phase == PlanPhase.past && prev?.phase != PlanPhase.past) {
+      _refreshGraph();
+      _askDidItHappen(incoming);
+      _notify();
+      return;
+    }
+
+    if (incoming.phase == PlanPhase.renewed &&
+        prev?.phase != PlanPhase.renewed) {
+      _applyRenewal(incoming);
+      _notify();
+      return;
+    }
+
+    if (prev != null && prev.when != incoming.when) {
+      _alert(
+        '${_nameOf(_otherSideOf(incoming))} suggested another time',
+        '${_humanWhen(incoming.when)} · tap to see the plan',
+        AppMode.planDetail,
+      );
+      _notify();
+      return;
+    }
+
+    if (prev != null) {
+      final added = [
+        for (final id in incoming.attendees.keys)
+          if (!prev.attendees.containsKey(id) && id != meId) _nameOf(id),
+      ];
+      if (added.isNotEmpty) {
+        showToast('${_joinNames(added)} joined the plan.');
+        return;
+      }
+      final accepted = [
+        for (final e in incoming.attendees.entries)
+          if (e.value == Attendance.accepted &&
+              e.key != meId &&
+              prev.attendees[e.key] != Attendance.accepted)
+            _nameOf(e.key),
+      ];
+      if (accepted.isNotEmpty) {
+        showToast(
+          accepted.length == 1
+              ? '${accepted.first} is in.'
+              : '${_joinNames(accepted)} are in.',
+        );
+        return;
+      }
+    }
+
+    _notify();
   }
+
+  void _applyRemoteRequest(ConnectionRequest incoming) {
+    final i = _requests.indexWhere((r) => r.key == incoming.key);
+    if (i >= 0) {
+      if (_requests[i].accepted == incoming.accepted) return;
+      _requests[i] = incoming;
+    } else {
+      _requests.add(incoming);
+    }
+    if (incoming.accepted) {
+      _addLiveEdge(incoming.fromPersonId, incoming.toPersonId);
+      if (incoming.toPersonId == meId || incoming.fromPersonId == meId) {
+        final other = incoming.fromPersonId == meId
+            ? incoming.toPersonId
+            : incoming.fromPersonId;
+        showToast('${_nameOf(other)} accepted. You are connected.');
+        return;
+      }
+      showToast(
+        '${_nameOf(incoming.fromPersonId)} and '
+        '${_nameOf(incoming.toPersonId)} are connected.',
+      );
+      return;
+    }
+    _notify();
+  }
+
+  bool _sameAttendance(Map<String, Attendance> a, Map<String, Attendance> b) {
+    if (a.length != b.length) return false;
+    for (final e in a.entries) {
+      if (b[e.key] != e.value) return false;
+    }
+    return true;
+  }
+
+  /// The attendee on the other end of a two-person plan, for banner copy.
+  String _otherSideOf(Plan p) {
+    for (final id in p.attendeeIds) {
+      if (id != meId) return id;
+    }
+    return p.hostPersonId;
+  }
+
+  // --- copy helpers ---------------------------------------------------------
+
+  String _nameOf(String id) => personById(id)?.name ?? 'Someone';
 
   static String _joinNames(List<String> names) => switch (names.length) {
     0 => 'nobody',
@@ -464,17 +882,68 @@ class AppState extends ChangeNotifier {
     _ => '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}',
   };
 
-  StreamSubscription<List<Invitation>>? _invitationSub;
+  static const _weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+
+  String _humanWhen(DateTime when) {
+    final n = now;
+    final today = DateTime(n.year, n.month, n.day);
+    final day = DateTime(when.year, when.month, when.day);
+    final delta = day.difference(today).inDays;
+    final clock = _clockLabel(when);
+    if (delta == 0) {
+      return when.hour >= 17 ? 'Tonight, $clock' : 'Today, $clock';
+    }
+    if (delta == 1) return 'Tomorrow, $clock';
+    if (delta == -1) return 'Yesterday, $clock';
+    return '${_weekdays[(when.weekday - 1) % 7]}, $clock';
+  }
+
+  static String _clockLabel(DateTime when) {
+    final suffix = when.hour < 12 ? 'AM' : 'PM';
+    final h = when.hour % 12 == 0 ? 12 : when.hour % 12;
+    final m = when.minute == 0
+        ? ''
+        : ':${when.minute.toString().padLeft(2, '0')}';
+    return '$h$m $suffix';
+  }
+
+  // --- plumbing -------------------------------------------------------------
+
+  void _notify() {
+    if (_disposed) return;
+    notifyListeners();
+  }
 
   @override
   void dispose() {
+    _disposed = true;
     _toastTimer?.cancel();
-    _invitationSub?.cancel();
-    _repo.dispose();
+    _bannerTimer?.cancel();
+    _renewTimer?.cancel();
+    _renewedTimer?.cancel();
+    try {
+      _director.dispose();
+    } catch (_) {
+      // Nothing here may take the demo down.
+    }
+    try {
+      _channel.dispose();
+    } catch (_) {
+      // Nothing here may take the demo down.
+    }
     super.dispose();
   }
 }
 
+/// Inherited access to the one [AppState].
 class AppScope extends InheritedNotifier<AppState> {
   const AppScope({
     super.key,

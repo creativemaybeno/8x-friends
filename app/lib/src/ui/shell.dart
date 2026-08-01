@@ -5,33 +5,37 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../env.dart';
-import '../graph/graph_view.dart';
+// `models.dart` owns the `GraphView` *enum*; this file owns the `GraphView`
+// *widget*. Prefix the widget so both names can live here.
+import '../graph/graph_view.dart' as graph;
 import '../model/models.dart';
 import '../state/app_state.dart';
 import '../theme/tokens.dart';
-import 'sheets/add_sheet.dart';
+import 'overlays/banner.dart';
+import 'overlays/demo_panel.dart';
+import 'overlays/renewed.dart';
+import 'sheets/circle_sheet.dart';
+import 'sheets/confirm_sheet.dart';
+import 'sheets/connect_sheet.dart';
 import 'sheets/focus_sheet.dart';
-import 'sheets/group_sheet.dart';
-import 'sheets/invites_sheet.dart';
+import 'sheets/identity_sheet.dart';
+import 'sheets/invitation_sheet.dart';
 import 'sheets/log_sheet.dart';
-import 'sheets/name_sheet.dart';
-import 'sheets/nudge_sheet.dart';
-import 'sheets/pay_sheet.dart';
-import 'sheets/propose_sheet.dart';
-import 'sheets/reach_sheet.dart';
-import 'sheets/time_sheet.dart';
+import 'sheets/plan_sheet.dart';
+import 'sheets/plan_time_sheet.dart';
 
-// Local design constants — fold into tokens.dart.
+// Local one-off geometry. Colours and text styles come from Tokens.
 const _chromeTop = 14.0;
 const _sheetOffscreen = 1.12;
-const _badgeDot = 5.0;
-const _navGap = 2.0;
+const _alertDot = 5.0;
+const _captionGap = 3.0;
 const _pillPadding = EdgeInsets.symmetric(horizontal: 10, vertical: 5);
-const _segmentPadding = EdgeInsets.symmetric(horizontal: 9, vertical: 5);
+const _segmentPadding = EdgeInsets.symmetric(horizontal: 11, vertical: 6);
 const _toastPadding = EdgeInsets.symmetric(horizontal: 15, vertical: 9);
 const _toastMaxWidth = 330.0;
+const _toastBottom = 80.0;
 
+/// The single surface. Everything the jury sees is a layer of this stack.
 class Shell extends StatefulWidget {
   const Shell({super.key});
 
@@ -40,6 +44,7 @@ class Shell extends StatefulWidget {
 }
 
 class _ShellState extends State<Shell> {
+  /// Retained so a dismissed sheet still has something to slide out with.
   Widget? _lastSheet;
 
   @override
@@ -47,6 +52,7 @@ class _ShellState extends State<Shell> {
     final state = AppScope.of(context);
     final sheet = _sheetFor(state);
     if (sheet != null) _lastSheet = sheet;
+    final demoVisible = sheet == null && !state.isBooting;
 
     // Material (not Scaffold) so the graph stays full-bleed edge to edge, and
     // so Text has a DefaultTextStyle ancestor (otherwise: yellow debug text).
@@ -55,7 +61,7 @@ class _ShellState extends State<Shell> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-          const GraphView(),
+          const graph.GraphView(),
           SafeArea(
             bottom: false,
             child: Padding(
@@ -72,12 +78,6 @@ class _ShellState extends State<Shell> {
             left: 0,
             right: 0,
             bottom: 0,
-            child: SafeArea(top: false, child: _Nav(state: state)),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
             child: AnimatedSlide(
               offset: Offset(0, sheet == null ? _sheetOffscreen : 0),
               duration: Tokens.sheetDuration,
@@ -88,138 +88,211 @@ class _ShellState extends State<Shell> {
           Positioned(
             left: Tokens.gapM,
             right: Tokens.gapM,
-            bottom: Tokens.navHeight + Tokens.gapXl,
+            bottom: _toastBottom,
             child: _Toast(message: state.toast),
           ),
+          const RenewedOverlay(),
+          const NotificationBannerOverlay(),
+          Positioned(
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  0,
+                  0,
+                  Tokens.gapM,
+                  Tokens.gapM,
+                ),
+                child: IgnorePointer(
+                  ignoring: !demoVisible,
+                  child: AnimatedOpacity(
+                    opacity: demoVisible ? 1 : 0,
+                    duration: Tokens.sheetDuration,
+                    curve: Tokens.sheetCurve,
+                    child: _DemoChip(state: state),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const DemoPanel(),
           _BootOverlay(state: state),
         ],
       ),
     );
   }
 
-  Widget? _sheetFor(AppState state) {
-    if (state.needsName) return const NameSheet();
-    return switch (state.mode) {
-      AppMode.focus => const FocusSheet(),
-      AppMode.log => const LogSheet(),
-      AppMode.add => const AddSheet(),
-      AppMode.nudge => const NudgeSheet(),
-      AppMode.group => const GroupSheet(),
-      AppMode.time => const TimeSheet(),
-      AppMode.reach => const ReachSheet(),
-      AppMode.invites => const InvitesSheet(),
-      AppMode.propose => const ProposeSheet(),
-      AppMode.pay => const PaySheet(),
-      AppMode.name => const NameSheet(),
-      AppMode.home || AppMode.boot => null,
-    };
-  }
+  Widget? _sheetFor(AppState s) => switch (s.mode) {
+    AppMode.identity => const IdentitySheet(),
+    AppMode.focus => const FocusSheet(),
+    AppMode.planTime => const PlanTimeSheet(),
+    AppMode.invitation => const InvitationSheet(),
+    AppMode.proposeTime => const ProposeTimeSheet(),
+    AppMode.circle => const CircleSheet(),
+    AppMode.planDetail => const PlanSheet(),
+    AppMode.connect => const ConnectSheet(),
+    AppMode.confirm => const ConfirmSheet(),
+    AppMode.log => const LogSheet(),
+    AppMode.home || AppMode.boot => null,
+  };
 }
 
+/// Wordmark, the one alert, the view switcher and what the graph is saying.
 class _TopChrome extends StatelessWidget {
   const _TopChrome({required this.state});
 
   final AppState state;
 
+  /// Whatever the graph is asking of you right now, highest stake first. The
+  /// confirm sheet's other door is the notification banner, which dismisses
+  /// itself after [Tokens.bannerDwell] — this pill keeps it open all demo.
+  (String, Color, AppMode)? _pill() {
+    if (state.awaitingConfirmation) {
+      return ('DID YOU MEET UP?', Tokens.green, AppMode.confirm);
+    }
+    if (state.hasIncomingInvitation) {
+      return ('1 INVITATION WAITING', Tokens.violet, AppMode.invitation);
+    }
+    return null;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final people = state.people.length;
-    final anon = state.ghosts.where((g) => !g.isNamed).length;
-    final reach = people + state.ghosts.length;
-    final pending = state.pendingInvitationCount;
+    final who = state.who;
+    final pill = _pill();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            GestureDetector(
-              onLongPress: state.reseed,
-              behavior: HitTestBehavior.opaque,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Text('8x', style: Tokens.wordmark),
-                  const SizedBox(width: Tokens.gapXs),
-                  Text('friends', style: Tokens.monoLabel),
-                ],
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text('8x', style: Tokens.wordmark),
+                const SizedBox(width: Tokens.gapXs),
+                Text('friends', style: Tokens.monoLabel),
+              ],
             ),
             const Spacer(),
-            if (pending > 0)
+            if (pill != null)
               Flexible(
-                child: GestureDetector(
-                  onTap: () => state.setMode(AppMode.invites),
-                  behavior: HitTestBehavior.opaque,
-                  child: Container(
-                    padding: _pillPadding,
-                    decoration: BoxDecoration(
-                      color: Tokens.borderColor,
-                      border: Border.all(
-                        color: Tokens.borderColorStrong,
-                        width: Tokens.hairline,
-                      ),
-                      borderRadius: BorderRadius.circular(Tokens.radiusChip),
-                    ),
-                    child: Text(
-                      pending == 1
-                          ? '1 INVITATION WAITING'
-                          : '$pending INVITATIONS WAITING',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Tokens.monoLabelBright,
-                    ),
-                  ),
+                child: _ActionPill(
+                  label: pill.$1,
+                  accent: pill.$2,
+                  onTap: () => state.setMode(pill.$3),
                 ),
               ),
           ],
         ),
-        const SizedBox(height: Tokens.gapS),
-        _LayoutSwitcher(state: state),
-        const SizedBox(height: Tokens.gapXs),
-        Text(switch (state.layout) {
-          GraphLayout.web => 'FREE FORCE LAYOUT',
-          GraphLayout.orbit => 'RADIUS = TIME SINCE YOU MET',
-          GraphLayout.strata => 'ISLANDS = SHARED CONTEXT',
-        }, style: Tokens.monoTiny),
-        const SizedBox(height: 2),
-        Text(
-          '$people PEOPLE · $anon ANON · $reach IN REACH',
-          style: Tokens.monoTiny,
-        ),
+        if (who != null) ...[
+          const SizedBox(height: Tokens.gapS),
+          _ViewSwitcher(state: state),
+          const SizedBox(height: Tokens.gapXs),
+          Text(switch (state.view) {
+            GraphView.health =>
+              'RELATIONSHIP HEALTH · ${state.people.length} PEOPLE',
+            GraphView.distance =>
+              'APPROXIMATE DISTANCE · UPDATED WHEN THEY OPEN THE APP',
+          }, style: Tokens.monoTiny),
+          const SizedBox(height: _captionGap),
+          Text('YOU ARE ${who.label.toUpperCase()}', style: Tokens.monoTiny),
+        ],
       ],
     );
   }
 }
 
-class _LayoutSwitcher extends StatelessWidget {
-  const _LayoutSwitcher({required this.state});
+/// The only thing allowed to interrupt the wordmark.
+class _ActionPill extends StatelessWidget {
+  const _ActionPill({
+    required this.label,
+    required this.accent,
+    required this.onTap,
+  });
+
+  final String label;
+  final Color accent;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Container(
+        padding: _pillPadding,
+        decoration: BoxDecoration(
+          color: Tokens.borderColor,
+          border: Border.all(
+            color: Tokens.borderColorStrong,
+            width: Tokens.hairline,
+          ),
+          borderRadius: BorderRadius.circular(Tokens.radiusChip),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: _alertDot,
+              height: _alertDot,
+              decoration: BoxDecoration(color: accent, shape: BoxShape.circle),
+            ),
+            const SizedBox(width: Tokens.gapXs),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Tokens.monoLabelBright,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Two readings of the same graph. Nothing else changes.
+class _ViewSwitcher extends StatelessWidget {
+  const _ViewSwitcher({required this.state});
 
   final AppState state;
+
+  static const _segments = <(GraphView, String)>[
+    (GraphView.health, 'HEALTH'),
+    (GraphView.distance, 'NEARBY'),
+  ];
+
+  void _select(GraphView view) {
+    if (view == GraphView.distance && !state.locationGranted) {
+      state.grantLocation();
+      state.showToast('Approximate distance only. Never live location.');
+    }
+    state.setView(view);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        for (final (layout, label) in const [
-          (GraphLayout.web, 'WEB'),
-          (GraphLayout.orbit, 'ORBIT'),
-          (GraphLayout.strata, 'STRATA'),
-        ])
+        for (final (view, label) in _segments)
           GestureDetector(
-            onTap: () => state.setLayout(layout),
+            onTap: () => _select(view),
             behavior: HitTestBehavior.opaque,
             child: Container(
               margin: const EdgeInsets.only(right: Tokens.gapXs),
               padding: _segmentPadding,
               decoration: BoxDecoration(
-                color: state.layout == layout
+                color: state.view == view
                     ? Tokens.borderColor
                     : Colors.transparent,
                 border: Border.all(
-                  color: state.layout == layout
+                  color: state.view == view
                       ? Tokens.borderColorStrong
                       : Colors.transparent,
                   width: Tokens.hairline,
@@ -228,7 +301,7 @@ class _LayoutSwitcher extends StatelessWidget {
               ),
               child: Text(
                 label,
-                style: state.layout == layout
+                style: state.view == view
                     ? Tokens.monoLabelBright
                     : Tokens.monoLabel,
               ),
@@ -239,105 +312,31 @@ class _LayoutSwitcher extends StatelessWidget {
   }
 }
 
-class _Nav extends StatelessWidget {
-  const _Nav({required this.state});
+/// Deliberately visible, deliberately small: the stage controls.
+class _DemoChip extends StatelessWidget {
+  const _DemoChip({required this.state});
 
   final AppState state;
 
-  static const _tabs = <(String, AppMode)>[
-    ('GRAPH', AppMode.home),
-    ('LOG', AppMode.log),
-    ('PULL', AppMode.nudge),
-    ('GROUP', AppMode.group),
-    ('REACH', AppMode.reach),
-    ('TIME', AppMode.time),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final mode = state.mode;
-    return SizedBox(
-      height: Tokens.navHeight,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: Tokens.gapS),
-        child: Row(
-          children: [
-            for (final (label, tabMode) in _tabs)
-              Expanded(
-                child: _NavTab(
-                  label: label,
-                  active: tabMode == AppMode.home
-                      ? (mode == AppMode.home || mode == AppMode.focus)
-                      : mode == tabMode,
-                  amber: tabMode == AppMode.nudge,
-                  badge: tabMode == AppMode.nudge && state.nudges.isNotEmpty,
-                  onTap: () => tabMode == AppMode.home
-                      ? state.goHome()
-                      : state.setMode(tabMode),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _NavTab extends StatelessWidget {
-  const _NavTab({
-    required this.label,
-    required this.active,
-    required this.amber,
-    required this.badge,
-    required this.onTap,
-  });
-
-  final String label;
-  final bool active;
-  final bool amber;
-  final bool badge;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = amber ? Tokens.amber : Tokens.cyan;
+    final open = state.demoPanelOpen;
     return GestureDetector(
-      onTap: onTap,
+      onTap: state.toggleDemoPanel,
       behavior: HitTestBehavior.opaque,
       child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: _navGap),
-        alignment: Alignment.center,
+        padding: _pillPadding,
         decoration: BoxDecoration(
-          color: active ? Tokens.borderColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(Tokens.radiusButton),
+          color: open ? Tokens.borderColorStrong : Tokens.borderColor,
+          border: Border.all(
+            color: Tokens.borderColorStrong,
+            width: Tokens.hairline,
+          ),
+          borderRadius: BorderRadius.circular(Tokens.radiusChip),
         ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          alignment: Alignment.center,
-          children: [
-            Opacity(
-              opacity: active ? 1 : 0.5,
-              child: Text(
-                label,
-                style: Tokens.monoNav.copyWith(
-                  color: amber || active ? color : Tokens.meta,
-                ),
-              ),
-            ),
-            if (badge)
-              Positioned(
-                top: -_badgeDot,
-                right: -_badgeDot,
-                child: Container(
-                  width: _badgeDot,
-                  height: _badgeDot,
-                  decoration: const BoxDecoration(
-                    color: Tokens.amber,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-          ],
+        child: Text(
+          'DEMO',
+          style: open ? Tokens.monoLabelBright : Tokens.monoLabel,
         ),
       ),
     );
@@ -419,8 +418,7 @@ class _BootOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final error = state.bootError ?? Env.misconfigurationReason;
-    final showing = state.isBooting || error != null;
+    final showing = state.isBooting;
     return IgnorePointer(
       ignoring: !showing,
       child: AnimatedOpacity(
@@ -438,11 +436,9 @@ class _BootOverlay extends StatelessWidget {
                   Text('8x', style: Tokens.personNameLarge),
                   const SizedBox(height: Tokens.gapS),
                   Text(
-                    error ?? 'assembling your graph',
+                    'assembling your graph',
                     textAlign: TextAlign.center,
-                    style: error == null
-                        ? Tokens.monoLabel
-                        : Tokens.monoLabel.copyWith(color: Tokens.amber),
+                    style: Tokens.monoLabel,
                   ),
                 ],
               ),

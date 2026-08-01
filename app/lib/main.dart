@@ -1,8 +1,13 @@
+/// Entry point: render the first frame, then connect.
+library;
+
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'src/data/supabase_repository.dart';
 import 'src/env.dart';
+import 'src/notify/notifications.dart';
 import 'src/state/app_state.dart';
 import 'src/theme/tokens.dart';
 import 'src/ui/shell.dart';
@@ -11,7 +16,8 @@ import 'src/ui/shell.dart';
 /// platform channel (shared_preferences); if that hangs — a stale plugin
 /// registrant after a dependency change is enough — the first frame never
 /// renders and iOS just leaves its white launch screen up, with no way to see
-/// why. Render first, connect after, and let the boot overlay report failures.
+/// why. Render first, connect after: the graph is a client-side fixture, so
+/// the demo runs whether or not the socket ever opens.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   Tokens.init();
@@ -31,24 +37,27 @@ class _EightXFriendsAppState extends State<EightXFriendsApp> {
   @override
   void initState() {
     super.initState();
-    _state = AppState(SupabaseGraphRepository());
+    _state = AppState();
     _start();
   }
 
-  /// Starting unconfigured is allowed on purpose: a fresh clone should run, and
-  /// the boot overlay says what is missing.
+  /// Starting unconfigured is allowed on purpose: a fresh clone should run,
+  /// and every screen still works — only cross-device sync goes quiet.
   Future<void> _start() async {
-    if (!Env.isConfigured) return;
-    try {
-      // A timeout turns "hangs forever on a blank screen" into a message you
-      // can read from the back of the room.
-      await Supabase.initialize(
-        url: Env.supabaseUrl,
-        publishableKey: Env.supabaseKey,
-      ).timeout(const Duration(seconds: 15));
-    } catch (_) {
-      // Fall through: boot() will fail against the uninitialised client and
-      // surface the reason on the overlay instead of dying silently here.
+    unawaited(
+      Notifications.init().then((_) => Notifications.requestPermission()),
+    );
+    if (Env.isConfigured) {
+      try {
+        // A timeout turns "hangs forever on a blank screen" into a demo that
+        // simply runs offline.
+        await Supabase.initialize(
+          url: Env.supabaseUrl,
+          publishableKey: Env.supabaseKey,
+        ).timeout(const Duration(seconds: 10));
+      } catch (_) {
+        // Fall through: the channel degrades to offline on its own.
+      }
     }
     await _state.boot();
   }

@@ -10,6 +10,8 @@ import 'dart:ui' show lerpDouble;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../model/models.dart';
+
 abstract final class Tokens {
   // --- Feature flags --------------------------------------------------------
 
@@ -35,6 +37,15 @@ abstract final class Tokens {
 
   /// Decay and the nudge surface only. Nowhere else.
   static const amber = Color(0xFFFFB35C);
+
+  /// A relationship in good health, and the renewal celebration.
+  static const green = Color(0xFF6EE7A8);
+
+  /// Everything that belongs to the one upcoming plan.
+  static const violet = Color(0xFFB79CFF);
+
+  /// Uncertainty: a pending attendee, a dashed ring, a waiting link.
+  static const dim = Color(0xFF2A4753);
 
   /// The colour node fills and link strokes sink toward as decay rises.
   static const sink = Color(0xFF0B1A21);
@@ -72,6 +83,25 @@ abstract final class Tokens {
   static double linkOpacity(double decay) => decay <= 0.92
       ? 1.0
       : (1.0 - (decay - 0.92) / 0.08 * 0.85).clamp(0.0, 1.0);
+
+  // --- Health language ------------------------------------------------------
+  //
+  // One word for how a relationship is doing. Machine voice, so uppercase.
+
+  /// `STRONG` · `STEADY` · `FADING` · `ALMOST GONE`.
+  static String healthLabel(double decay) => switch (decay) {
+    < 0.25 => 'STRONG',
+    < 0.50 => 'STEADY',
+    < 0.75 => 'FADING',
+    _ => 'ALMOST GONE',
+  };
+
+  /// The colour that matches [healthLabel].
+  static Color healthColor(double decay) => switch (decay) {
+    < 0.25 => green,
+    < 0.50 => cyan,
+    _ => amber,
+  };
 
   // --- Type -----------------------------------------------------------------
   //
@@ -132,6 +162,15 @@ abstract final class Tokens {
       _sans(size: 20, weight: FontWeight.w600, color: heading, spacing: 0.5);
   static TextStyle get sheetTitle =>
       _sans(size: 21, weight: FontWeight.w600, color: heading, height: 1.15);
+
+  /// The one heading a sheet leads with when the moment deserves the room.
+  static TextStyle get sheetTitleLarge => _sans(
+    size: 30,
+    weight: FontWeight.w600,
+    color: heading,
+    spacing: -0.3,
+    height: 1.08,
+  );
   static TextStyle get sheetProse =>
       _sans(size: 14, weight: FontWeight.w300, color: prose, height: 1.45);
   static TextStyle get personName =>
@@ -143,11 +182,36 @@ abstract final class Tokens {
   static TextStyle get buttonLabel =>
       _sans(size: 15, weight: FontWeight.w600, color: onAccent, spacing: 0.4);
 
+  /// The value inside a stat block: short, bright, sans.
+  static TextStyle get statValue =>
+      _sans(size: 20, weight: FontWeight.w600, color: heading, height: 1.1);
+
+  /// Notification banner, first line.
+  static TextStyle get bannerTitle =>
+      _sans(size: 14, weight: FontWeight.w600, color: heading, spacing: 0.1);
+
+  /// Notification banner, second line.
+  static TextStyle get bannerBody =>
+      _sans(size: 13, weight: FontWeight.w300, color: prose, height: 1.3);
+
+  /// The renewal celebration headline.
+  static TextStyle get renewedTitle => _sans(
+    size: 24,
+    weight: FontWeight.w600,
+    color: green,
+    spacing: 1.2,
+    height: 1.15,
+  );
+
   // Machine voice — uppercase at the call site.
   static TextStyle get monoLabel =>
       _mono(size: 9, weight: FontWeight.w400, color: meta, spacing: 1.6);
   static TextStyle get monoLabelBright =>
       _mono(size: 9, weight: FontWeight.w500, color: cyan, spacing: 1.6);
+
+  /// [monoLabel] stepped back: captions that must not compete.
+  static TextStyle get monoLabelDim =>
+      _mono(size: 9, weight: FontWeight.w400, color: faint, spacing: 1.6);
   static TextStyle get monoTiny =>
       _mono(size: 8.5, weight: FontWeight.w300, color: faint, spacing: 1.5);
   static TextStyle get monoNav =>
@@ -208,23 +272,42 @@ abstract final class Tokens {
   static const fragmentSegmentLength = 15.0;
   static const fragmentAmplitude = 11.0;
 
+  // --- Plan, pending and renewal visuals ------------------------------------
+
+  /// The solid violet ring every attendee of the upcoming plan wears.
+  static const planRingOffset = 19.0;
+  static const planRingStroke = 1.4;
+
+  /// A pending attendee's ring and plan link are dashed with this rhythm.
+  static const pendingDashLength = 5.0;
+  static const pendingGapLength = 5.0;
+
+  /// The small calendar mark that sits above a confirmed attendee.
+  static const planIconRadius = 8.0;
+  static const planIconOffset = 20.0;
+
+  /// The stroke width of a link while it is being renewed.
+  static const renewPulseWidth = 5.0;
+
   // --- Forces ---------------------------------------------------------------
 
   static const repulsion = 2100.0;
-  static const repulsionGhost = 780.0;
   static const repulsionClamp = 3.0;
   static const damping = 0.865;
   static const meCentring = 0.06;
   static const globalCentring = 0.0016;
 
-  /// ORBIT: radial pull to `104 + decay * 250` at strength 0.012.
-  static const orbitRadiusBase = 104.0;
+  /// Extra radius a fully decayed relationship drifts outward by.
   static const orbitRadiusDecay = 250.0;
-  static const orbitStrength = 0.012;
 
-  /// STRATA: attraction 0.016 to five context anchors on a circle of r = 205.
-  static const strataStrength = 0.016;
-  static const strataAnchorRadius = 205.0;
+  /// DISTANCE view: radial pull to `base + km * perKm` around the me node.
+  static const distanceRadiusPerKm = 5.2;
+  static const distanceRadiusBase = 90.0;
+  static const distanceStrength = 0.014;
+
+  /// The upcoming plan gathers its people into a small foreground cluster.
+  static const planClusterStrength = 0.030;
+  static const planClusterRadius = 74.0;
 
   // --- Motion ---------------------------------------------------------------
 
@@ -239,24 +322,58 @@ abstract final class Tokens {
   static const toastDuration = Duration(milliseconds: 2400);
   static const bootDuration = Duration(milliseconds: 2200);
 
+  /// The in-app notification banner drops in, waits, and leaves.
+  static const bannerDuration = Duration(milliseconds: 520);
+  static const bannerCurve = Cubic(0.16, 1, 0.3, 1);
+  static const bannerDwell = Duration(seconds: 6);
+
+  /// How long "Connection renewed" stays on screen, and how long the links
+  /// keep pulsing underneath it.
+  static const renewedDwell = Duration(milliseconds: 3200);
+  static const renewAnimation = Duration(milliseconds: 2600);
+
+  // --- Camera ---------------------------------------------------------------
+
+  /// `(zoom, panY)` for every mode. The graph is the interface, so a mode is
+  /// first of all a camera move.
+  static const cameraByMode = <AppMode, (double, double)>{
+    AppMode.boot: (0.55, 0.0),
+    AppMode.identity: (0.55, 0.0),
+    AppMode.home: (0.80, 0.0),
+    AppMode.focus: (1.35, 165.0),
+    AppMode.planTime: (0.95, 150.0),
+    AppMode.invitation: (0.90, 150.0),
+    AppMode.proposeTime: (0.95, 150.0),
+    AppMode.circle: (0.95, 150.0),
+    AppMode.planDetail: (1.05, 150.0),
+    AppMode.connect: (1.20, 160.0),
+    AppMode.confirm: (0.90, 150.0),
+    AppMode.log: (0.95, 140.0),
+  };
+
   // --- Dim levels by mode ---------------------------------------------------
 
-  static const dimFocus = 0.07;
+  static const dimFocus = 0.10;
   static const dimLog = 0.42;
   static const dimNudge = 0.13;
   static const dimPropose = 0.20;
+
+  /// Anything about the one upcoming plan: the cluster stays readable, the
+  /// rest of the graph stays present.
+  static const dimPlan = 0.22;
   static const dimHome = 1.0;
 
-  static const ghostOpacity = 0.22;
-  static const ghostOpacityReach = 0.70;
-  static const ghostOpacityFocus = 0.10;
-
-  /// How much non-selected nodes are faded in each mode.
+  /// How much non-selected nodes are faded in each mode. Takes `AppMode.name`.
   static double dimFor(String mode) => switch (mode) {
     'focus' => dimFocus,
+    'connect' => dimFocus,
+    'planTime' => dimPlan,
+    'invitation' => dimPlan,
+    'proposeTime' => dimPlan,
+    'circle' => dimPlan,
+    'planDetail' => dimPlan,
+    'confirm' => dimPlan,
     'log' => dimLog,
-    'nudge' => dimNudge,
-    'propose' => dimPropose,
     _ => dimHome,
   };
 
