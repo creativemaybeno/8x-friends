@@ -28,6 +28,10 @@ const double _selectionAlpha = 0.9;
 const double _inviteStroke = 1.1;
 const double _inviteRate = 3.4;
 const double _ghostStrokeWidth = 0.9;
+const int _maxFragmentSegments = 48;
+
+/// `double.nan.round()` throws, so every canvas maths path is gated on this.
+bool _finite(Offset o) => o.dx.isFinite && o.dy.isFinite;
 
 class GraphPainter extends CustomPainter {
   GraphPainter({
@@ -85,6 +89,7 @@ class GraphPainter extends CustomPainter {
     final a = sim.nodeById(l.aId);
     final b = sim.nodeById(l.bId);
     if (a == null || b == null) return;
+    if (!_finite(a.pos) || !_finite(b.pos)) return;
 
     final d = l.decay;
     final vis = math.min(_dimOf(l.aId), _dimOf(l.bId));
@@ -115,10 +120,13 @@ class GraphPainter extends CustomPainter {
 
     final delta = b.pos - a.pos;
     final len = delta.distance;
-    if (len < 0.001) return;
+    if (!(len > 0.001)) return; // false for NaN too
     final dir = delta / len;
     final perp = Offset(-dir.dy, dir.dx);
-    final segs = math.max(3, (len / Tokens.fragmentSegmentLength).round());
+    final segs = math.min(
+      _maxFragmentSegments,
+      math.max(3, (len / Tokens.fragmentSegmentLength).round()),
+    );
     final fill = math.max(
       _fragmentFillMin,
       _fragmentFillBase - d * _fragmentFillDecay,
@@ -141,6 +149,7 @@ class GraphPainter extends CustomPainter {
   // --- nodes ----------------------------------------------------------------
 
   void _paintNode(Canvas canvas, SimNode n) {
+    if (!_finite(n.pos)) return;
     if (n.isGhost) {
       canvas.drawCircle(
         n.pos,
@@ -246,7 +255,10 @@ class GraphPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = _inviteStroke
           ..color = Tokens.cyan.withValues(
-            alpha: 0.55 + 0.45 * math.sin(t * _inviteRate + n.phase),
+            alpha: (0.55 + 0.45 * math.sin(t * _inviteRate + n.phase)).clamp(
+              0.0,
+              1.0,
+            ),
           ),
       );
     }
@@ -255,6 +267,7 @@ class GraphPainter extends CustomPainter {
   // --- labels ---------------------------------------------------------------
 
   void _paintLabel(Canvas canvas, SimNode n) {
+    if (!_finite(n.pos)) return;
     final name = _nameOf(n.id);
     if (name == null || name.isEmpty) return;
 

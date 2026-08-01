@@ -30,7 +30,10 @@ Future<Profile> signInAndEnsureProfile(SupabaseClient c) async {
     if (c.auth.currentUser == null) {
       await c.auth.signInAnonymously();
     }
-    final uid = c.auth.currentUser!.id;
+    // Never `!` here: a sign-in that returns no session must surface as the
+    // boot error, not as a null-check crash on a black screen.
+    final uid = c.auth.currentUser?.id;
+    if (uid == null) throw Exception('Could not sign in: no session.');
 
     final existing = await c
         .from('profiles')

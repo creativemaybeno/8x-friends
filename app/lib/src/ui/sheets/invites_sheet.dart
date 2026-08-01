@@ -66,8 +66,15 @@ class InvitesSheet extends StatelessWidget {
                     )
                   : null,
             ),
-          if (invitations.isEmpty)
-            Text('NO INVITATIONS', style: Tokens.monoLabel),
+          if (invitations.isEmpty) ...[
+            Text('NOTHING WAITING', style: Tokens.monoLabel),
+            const SizedBox(height: Tokens.gapXs),
+            Text(
+              'Quiet in here. When someone in your graph starts something, '
+              'it lands right here.',
+              style: Tokens.sheetProse,
+            ),
+          ],
         ],
       ),
     );

@@ -44,6 +44,7 @@ class NudgeSheet extends StatelessWidget {
               meta: Contexts.label(n.person.context),
               dot: Tokens.contextColor(n.person.context),
               trailing: Row(
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     n.days >= kNeverMetDays ? '∞' : '${n.days.floor()}d',

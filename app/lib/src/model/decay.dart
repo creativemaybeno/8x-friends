@@ -184,8 +184,7 @@ class DecayModel {
   double linkDaysOf(Relationship r) => linkDays[r.key] ?? kNeverMetDays;
 
   double linkDecayOf(Relationship r) {
-    final h =
-        (horizonOf(r.aPersonId) + horizonOf(r.bPersonId)) / 2;
+    final h = (horizonOf(r.aPersonId) + horizonOf(r.bPersonId)) / 2;
     return decayFor(linkDaysOf(r), horizon: h);
   }
 
@@ -214,17 +213,15 @@ class Nudge {
 ///
 /// `score = daysSince * (0.55 + closeness * 0.22)`
 List<Nudge> topNudges(DecayModel model, {int count = 3}) {
-  final ranked =
-      <Nudge>[
-        for (final p in model.people)
-          if (!p.isMe)
-            Nudge(
-              person: p,
-              days: model.daysOf(p.id),
-              score:
-                  model.daysOf(p.id) * (0.55 + p.closeness * 0.22),
-            ),
-      ]..sort((a, b) => b.score.compareTo(a.score));
+  final ranked = <Nudge>[
+    for (final p in model.people)
+      if (!p.isMe)
+        Nudge(
+          person: p,
+          days: model.daysOf(p.id),
+          score: model.daysOf(p.id) * (0.55 + p.closeness * 0.22),
+        ),
+  ]..sort((a, b) => b.score.compareTo(a.score));
   return ranked.take(count).toList();
 }
 
@@ -274,11 +271,10 @@ List<Person> assembleGroup(DecayModel model, {Person? seed}) {
         math.min(3.0, model.daysOf(p.id) / 90);
   }
 
-  final rest =
-      [
-        for (final p in candidates)
-          if (p.id != anchor.id) p,
-      ]..sort((a, b) => scoreOf(b).compareTo(scoreOf(a)));
+  final rest = [
+    for (final p in candidates)
+      if (p.id != anchor.id) p,
+  ]..sort((a, b) => scoreOf(b).compareTo(scoreOf(a)));
 
   return [anchor, ...rest.take(kGroupSize - 1)];
 }

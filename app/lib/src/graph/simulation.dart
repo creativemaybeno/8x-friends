@@ -61,6 +61,10 @@ class Simulation {
   double _t = 0;
   double _acc = 0;
 
+  /// Monotonic spawn counter. Never `_nodes.length` — removing then adding a
+  /// node would reuse a spiral index and stack two nodes on one point.
+  int _spawns = 0;
+
   /// Seconds since the simulation started. Drives breathing and fragments.
   double get time => _t;
 
@@ -88,7 +92,7 @@ class Simulation {
       if (existing == null) {
         _nodes[p.id] = SimNode(
           id: p.id,
-          pos: p.isMe ? Offset.zero : _initialPos(_nodes.length),
+          pos: p.isMe ? Offset.zero : _initialPos(_spawns++),
           radius: radius,
           phase: _phaseOf(p.id),
           isMe: p.isMe,
@@ -110,7 +114,7 @@ class Simulation {
       if (_nodes[g.id] == null) {
         _nodes[g.id] = SimNode(
           id: g.id,
-          pos: _initialPos(_nodes.length),
+          pos: _initialPos(_spawns++),
           radius: _ghostRadius,
           phase: _phaseOf(g.id),
           isGhost: true,
@@ -163,6 +167,18 @@ class Simulation {
   void _step() {
     final list = _nodes.values.toList(growable: false);
 
+    // One non-finite value would poison every force below it forever and the
+    // canvas would silently draw nothing. Re-seed the node instead.
+    for (var i = 0; i < list.length; i++) {
+      final n = list[i];
+      if (!n.pos.dx.isFinite || !n.pos.dy.isFinite) {
+        n.pos = _initialPos(i);
+        n.vel = Offset.zero;
+      } else if (!n.vel.dx.isFinite || !n.vel.dy.isFinite) {
+        n.vel = Offset.zero;
+      }
+    }
+
     for (var i = 0; i < list.length; i++) {
       final a = list[i];
       for (var j = i + 1; j < list.length; j++) {
@@ -204,7 +220,12 @@ class Simulation {
     final centre = me?.pos ?? Offset.zero;
 
     for (final n in list) {
-      if (n.pinned) continue;
+      if (n.pinned) {
+        // A held node still collects force from the loops above. Without this
+        // it launches across the screen the instant the finger lifts.
+        n.vel = Offset.zero;
+        continue;
+      }
       if (n.isMe) {
         n.vel -= n.pos * Tokens.meCentring;
       } else if (n.isGhost) {

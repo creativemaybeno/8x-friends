@@ -156,11 +156,12 @@ class AppState extends ChangeNotifier {
 
   void setMode(AppMode m) {
     if (_mode == m) return;
-    final from = _mode;
+
     _mode = m;
-    if (_selectionModes.contains(m) &&
-        from == AppMode.focus &&
-        _focusedPersonId != null) {
+    // Pre-seed on "who is focused", not "which mode we came from": WE MET UP
+    // has to work whether focus was entered by tapping the node or by the
+    // nudge list jumping straight into log.
+    if (_selectionModes.contains(m) && _focusedPersonId != null) {
       _selectedPersonIds
         ..clear()
         ..add(_focusedPersonId!);

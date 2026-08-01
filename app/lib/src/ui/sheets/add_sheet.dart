@@ -55,14 +55,20 @@ class _AddSheetState extends State<AddSheet> {
             : !_wiring
             ? () => setState(() => _wiring = true)
             : () async {
-                final ties = _knownBy.length;
                 await state.addPerson(
                   name: name,
                   context: _context,
                   knownByPersonIds: _knownBy.toList(),
                 );
-                state.showToast('$name is in the graph with $ties ties.');
-                state.goHome();
+                // Sheet stays mounted while it slides away; reset it only if
+                // the write landed, otherwise the retry loses everything.
+                if (!mounted || state.mode != AppMode.home) return;
+                _name.clear();
+                setState(() {
+                  _knownBy.clear();
+                  _context = null;
+                  _wiring = false;
+                });
               },
       ),
       child: _wiring

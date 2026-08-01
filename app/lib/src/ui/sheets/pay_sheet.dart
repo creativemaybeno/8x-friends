@@ -5,8 +5,15 @@ import '../../theme/tokens.dart';
 import 'propose_sheet.dart' show proposeDraft;
 import 'sheet_scaffold.dart';
 
-class PaySheet extends StatelessWidget {
+class PaySheet extends StatefulWidget {
   const PaySheet({super.key});
+
+  @override
+  State<PaySheet> createState() => _PaySheetState();
+}
+
+class _PaySheetState extends State<PaySheet> {
+  bool _busy = false;
 
   static const _free = [
     'Your whole graph',
@@ -24,20 +31,40 @@ class PaySheet extends StatelessWidget {
     'See who answered',
   ];
 
+  Future<void> _goLive(AppState state) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    // `goLive` awaits the `is_subscriber` write, so the row is committed
+    // before any propose is attempted — a local-only flag fails the RLS
+    // insert policy on `invitations`.
+    await state.goLive();
+    if (!mounted) return;
+    // If the write failed we are still free; proposing now would bounce us
+    // straight back into this paywall.
+    if (!state.isSubscriber) {
+      setState(() => _busy = false);
+      return;
+    }
+    // Resume the interrupted proposal. Take a copy and clear first so a
+    // second tap cannot send it twice.
+    final recipients = proposeDraft.recipients.toList();
+    final place = proposeDraft.place;
+    final when = proposeDraft.dateFrom(state.now);
+    proposeDraft.clear();
+    if (recipients.isNotEmpty) {
+      await state.propose(
+        recipientProfileIds: recipients,
+        place: place.isEmpty ? null : place,
+        proposedFor: when,
+      );
+    }
+    if (!mounted) return;
+    setState(() => _busy = false);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-
-    Future<void> goLive() async {
-      await state.goLive();
-      if (proposeDraft.isEmpty) return;
-      await state.propose(
-        recipientProfileIds: proposeDraft.recipients.toList(),
-        place: proposeDraft.place,
-        proposedFor: proposeDraft.dateFrom(state.now),
-      );
-      proposeDraft.clear();
-    }
 
     return SheetScaffold(
       label: '8X LIVE',
@@ -46,7 +73,10 @@ class PaySheet extends StatelessWidget {
       footer: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SheetButton(label: 'GO LIVE — €4 / MONTH', onTap: goLive),
+          SheetButton(
+            label: _busy ? 'GOING LIVE…' : 'GO LIVE — €4 / MONTH',
+            onTap: _busy ? null : () => _goLive(state),
+          ),
           const SizedBox(height: Tokens.gapS),
           Center(
             child: Text(

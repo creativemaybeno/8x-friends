@@ -8,7 +8,8 @@ import '../../state/app_state.dart';
 import '../../theme/tokens.dart';
 import 'sheet_scaffold.dart';
 
-const double _maxOffsetDays = 540;
+/// The scrubber range is the state's range — never a second copy of it.
+const double _maxOffsetDays = kMaxTimeOffsetDays;
 const double _weekDays = 7;
 
 class TimeSheet extends StatelessWidget {
@@ -54,9 +55,11 @@ class TimeSheet extends StatelessWidget {
               overlayColor: Tokens.borderColor,
             ),
             child: Slider(
-              value: _maxOffsetDays - offset.clamp(0, _maxOffsetDays),
+              value: (_maxOffsetDays - offset).clamp(0.0, _maxOffsetDays),
               max: _maxOffsetDays,
-              onChanged: (v) => state.setTimeOffsetDays(_maxOffsetDays - v),
+              onChanged: (v) => state.setTimeOffsetDays(
+                (_maxOffsetDays - v).clamp(0.0, _maxOffsetDays),
+              ),
             ),
           ),
           Row(

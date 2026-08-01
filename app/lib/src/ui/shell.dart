@@ -48,7 +48,9 @@ class _ShellState extends State<Shell> {
     final sheet = _sheetFor(state);
     if (sheet != null) _lastSheet = sheet;
 
-    return ColoredBox(
+    // Material (not Scaffold) so the graph stays full-bleed edge to edge, and
+    // so Text has a DefaultTextStyle ancestor (otherwise: yellow debug text).
+    return Material(
       color: Tokens.void_,
       child: Stack(
         fit: StackFit.expand,
@@ -147,24 +149,28 @@ class _TopChrome extends StatelessWidget {
             ),
             const Spacer(),
             if (pending > 0)
-              GestureDetector(
-                onTap: () => state.setMode(AppMode.invites),
-                behavior: HitTestBehavior.opaque,
-                child: Container(
-                  padding: _pillPadding,
-                  decoration: BoxDecoration(
-                    color: Tokens.borderColor,
-                    border: Border.all(
-                      color: Tokens.borderColorStrong,
-                      width: Tokens.hairline,
+              Flexible(
+                child: GestureDetector(
+                  onTap: () => state.setMode(AppMode.invites),
+                  behavior: HitTestBehavior.opaque,
+                  child: Container(
+                    padding: _pillPadding,
+                    decoration: BoxDecoration(
+                      color: Tokens.borderColor,
+                      border: Border.all(
+                        color: Tokens.borderColorStrong,
+                        width: Tokens.hairline,
+                      ),
+                      borderRadius: BorderRadius.circular(Tokens.radiusChip),
                     ),
-                    borderRadius: BorderRadius.circular(Tokens.radiusChip),
-                  ),
-                  child: Text(
-                    pending == 1
-                        ? '1 INVITATION WAITING'
-                        : '$pending INVITATIONS WAITING',
-                    style: Tokens.monoLabelBright,
+                    child: Text(
+                      pending == 1
+                          ? '1 INVITATION WAITING'
+                          : '$pending INVITATIONS WAITING',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Tokens.monoLabelBright,
+                    ),
                   ),
                 ),
               ),
@@ -350,12 +356,16 @@ class _Toast extends StatefulWidget {
 class _ToastState extends State<_Toast> {
   Timer? _timer;
   bool _visible = false;
+  String? _shown;
 
   @override
   void didUpdateWidget(_Toast old) {
     super.didUpdateWidget(old);
     if (widget.message != old.message && widget.message != null) {
-      setState(() => _visible = true);
+      setState(() {
+        _visible = true;
+        _shown = widget.message;
+      });
       _timer?.cancel();
       _timer = Timer(Tokens.toastDuration, () {
         if (mounted) setState(() => _visible = false);
@@ -390,7 +400,7 @@ class _ToastState extends State<_Toast> {
                 borderRadius: BorderRadius.circular(Tokens.radiusButton),
               ),
               child: Text(
-                widget.message ?? '',
+                _shown ?? '',
                 textAlign: TextAlign.center,
                 style: Tokens.sheetProse,
               ),

@@ -33,13 +33,6 @@ class _LogSheetState extends State<LogSheet> {
     super.dispose();
   }
 
-  String _toast(List<Person> people) {
-    if (people.length == 1) return '${people.first.name} is lit up again.';
-    final names = people.map((p) => p.name).toList();
-    final last = names.removeLast();
-    return '${names.join(', ')} and $last are lit up again.';
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
@@ -71,7 +64,6 @@ class _LogSheetState extends State<LogSheet> {
         onTap: chosen.isEmpty
             ? null
             : () async {
-                final message = _toast(chosen);
                 final when = state.now.subtract(Duration(days: _daysBack));
                 final place = _place.text.trim();
                 await state.logMeetUp(
@@ -79,24 +71,26 @@ class _LogSheetState extends State<LogSheet> {
                   personIds: chosen.map((p) => p.id).toList(),
                   place: place.isEmpty ? null : place,
                 );
-                state.clearSelection();
-                state.showToast(message);
-                state.goHome();
+                // The sheet stays mounted while it slides away, so reset it —
+                // but only when the write actually landed.
+                if (!mounted || state.mode != AppMode.home) return;
+                _place.clear();
+                setState(() => _daysBack = 0);
               },
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          Wrap(
+            spacing: Tokens.gapXs,
+            runSpacing: Tokens.gapXs,
             children: [
-              for (final (label, days) in _whenChips) ...[
+              for (final (label, days) in _whenChips)
                 SheetChip(
                   label: label,
                   selected: _daysBack == days,
                   onTap: () => setState(() => _daysBack = days),
                 ),
-                const SizedBox(width: Tokens.gapXs),
-              ],
             ],
           ),
           const SizedBox(height: Tokens.gapM),

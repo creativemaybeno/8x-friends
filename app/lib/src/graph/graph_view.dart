@@ -40,6 +40,7 @@ class _GraphViewState extends State<GraphView>
 
   Offset? _lastCameraTarget;
   double? _lastZoomTarget;
+  String? _lastFocusedId;
   bool _userCamera = false;
 
   SimNode? _dragging;
@@ -76,14 +77,20 @@ class _GraphViewState extends State<GraphView>
   Offset _toWorld(Offset local) =>
       (local - Offset(_size.width / 2, _size.height / 2)) / _zoom + _camera;
 
+  /// Slop is a screen distance, so it has to shrink as the world grows —
+  /// otherwise nothing is tappable when zoomed out.
+  double get _worldSlop => _hitSlop / _zoom.clamp(_zoomMin, _zoomMax);
+
   // --- gestures --------------------------------------------------------------
 
   void _onScaleStart(ScaleStartDetails d) {
     _gestureStart = d.localFocalPoint;
     _cameraStart = _camera;
     _zoomStart = _zoom;
+    _dragging?.pinned = false;
+    _dragging = null;
     if (d.pointerCount == 1) {
-      _dragging = _sim.hitTest(_toWorld(d.localFocalPoint), slop: _hitSlop);
+      _dragging = _sim.hitTest(_toWorld(d.localFocalPoint), slop: _worldSlop);
       _dragging?.pinned = true;
     }
   }
@@ -117,7 +124,9 @@ class _GraphViewState extends State<GraphView>
   }
 
   void _onTapUp(TapUpDetails d, AppState state) {
-    final hit = _sim.hitTest(_toWorld(d.localPosition), slop: _hitSlop);
+    _dragging?.pinned = false;
+    _dragging = null;
+    final hit = _sim.hitTest(_toWorld(d.localPosition), slop: _worldSlop);
     if (hit == null) {
       state.goHome();
       return;
@@ -140,15 +149,23 @@ class _GraphViewState extends State<GraphView>
     _sim.sync(state.people, state.relationships, state.ghosts, state.decay);
 
     if (state.cameraTarget != _lastCameraTarget ||
-        state.cameraZoom != _lastZoomTarget) {
+        state.cameraZoom != _lastZoomTarget ||
+        state.focusedPersonId != _lastFocusedId) {
       _lastCameraTarget = state.cameraTarget;
       _lastZoomTarget = state.cameraZoom;
+      _lastFocusedId = state.focusedPersonId;
       _userCamera = false;
     }
     if (!_userCamera) {
-      _camera = Offset.lerp(_camera, state.cameraTarget, Tokens.cameraLerp)!;
+      _camera = Offset.lerp(
+        _camera,
+        _cameraTargetFor(state),
+        Tokens.cameraLerp,
+      )!;
       _zoom = Tokens.lerp(_zoom, state.cameraZoom, Tokens.cameraLerp);
     }
+    if (!_camera.dx.isFinite || !_camera.dy.isFinite) _camera = Offset.zero;
+    if (!_zoom.isFinite) _zoom = 1;
     _dim = Tokens.lerp(_dim, Tokens.dimFor(state.mode.name), Tokens.dimLerp);
 
     final highlighted = _highlighted(state);
@@ -156,7 +173,8 @@ class _GraphViewState extends State<GraphView>
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        _size = constraints.biggest;
+        final biggest = constraints.biggest;
+        _size = biggest.isFinite ? biggest : Tokens.referenceSize;
         return GestureDetector(
           behavior: HitTestBehavior.opaque,
           onScaleStart: _onScaleStart,
@@ -181,6 +199,19 @@ class _GraphViewState extends State<GraphView>
         );
       },
     );
+  }
+
+  /// `AppState.cameraTarget` is a per-mode pan only — on its own it leaves the
+  /// focused node wherever it happened to be, often behind the sheet or off
+  /// screen. In focus mode the pan is applied *relative to that node*.
+  Offset _cameraTargetFor(AppState state) {
+    final base = state.cameraTarget;
+    if (state.mode != AppMode.focus) return base;
+    final id = state.focusedPersonId;
+    if (id == null) return base;
+    final n = _sim.nodeById(id);
+    if (n == null || !n.pos.dx.isFinite || !n.pos.dy.isFinite) return base;
+    return n.pos + base;
   }
 
   Set<String> _highlighted(AppState state) {

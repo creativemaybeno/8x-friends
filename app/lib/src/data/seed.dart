@@ -70,7 +70,7 @@ class _Seeded {
 // The roster is written out rather than generated: the demo lives or dies on
 // this shape. Five contexts, five people each.
 final _roster = <_Seeded>[
-  _Seeded('Mara', Contexts.family, 3, 412, null),
+  _Seeded('Mara', Contexts.family, 3, 447, null),
   _Seeded('Tobias', Contexts.family, 2, null, null),
   _Seeded('Elin', Contexts.family, 3, null, null),
   _Seeded('Jonas', Contexts.family, 1, null, null),
@@ -129,13 +129,20 @@ Future<void> seedFixture(SupabaseClient c, String profileId) async {
       _roster[i].id = _uuid('$profileId:person:$i');
     }
 
+    // PostgREST rejects a bulk insert whose objects do not all carry the *same*
+    // keys ("All object keys must match"), so every row spells out every
+    // column — nulls included.
     final peopleRows = <Map<String, dynamic>>[
       {
         'id': mePersonId,
         'owner_id': profileId,
         'name': (myName == null || myName.isEmpty) ? 'YOU' : myName,
+        'context': null,
         'closeness': 3,
         'is_me': true,
+        'met_via': null,
+        'birthday_day': null,
+        'birthday_month': null,
       },
       for (var i = 0; i < _roster.length; i++)
         {
@@ -145,55 +152,19 @@ Future<void> seedFixture(SupabaseClient c, String profileId) async {
           'context': _roster[i].context,
           'closeness': _roster[i].closeness,
           'is_me': false,
-          'met_via': ?_roster[i].metVia,
-          if (i % 4 == 1) ...{
-            'birthday_day': 2 + (i * 7) % 26,
-            'birthday_month': 1 + (i * 5) % 12,
-          },
+          'met_via': _roster[i].metVia,
+          'birthday_day': i % 4 == 1 ? 2 + (i * 7) % 26 : null,
+          'birthday_month': i % 4 == 1 ? 1 + (i * 5) % 12 : null,
         },
     ];
-
-    // --- relationships ------------------------------------------------------
-    final pairs = <String>{};
-    final relRows = <Map<String, dynamic>>[];
-    void link(String x, String y) {
-      if (x == y) return;
-      final (a, b) = x.compareTo(y) < 0 ? (x, y) : (y, x);
-      if (!pairs.add('$a|$b')) return;
-      relRows.add({
-        'id': _uuid('$profileId:rel:$a:$b'),
-        'owner_id': profileId,
-        'a_person_id': a,
-        'b_person_id': b,
-      });
-    }
-
-    for (final context in Contexts.all) {
-      final group = [
-        for (final p in _roster)
-          if (p.context == context) p,
-      ];
-      for (var i = 0; i < group.length; i++) {
-        link(group[i].id, group[(i + 1) % group.length].id);
-      }
-      link(group[0].id, group[2].id);
-      link(group[1].id, group[4].id);
-    }
-    for (var i = 0; relRows.length < 50 && i < 2000; i++) {
-      link(r.pick(_roster).id, r.pick(_roster).id);
-    }
-    // Deterministic sweep so the fixture can never depend on the RNG reaching
-    // 50 — a demo must not be able to hang here.
-    for (var i = 0; i < _roster.length && relRows.length < 50; i++) {
-      for (var j = i + 1; j < _roster.length && relRows.length < 50; j++) {
-        link(_roster[i].id, _roster[j].id);
-      }
-    }
 
     // --- events -------------------------------------------------------------
     final eventRows = <Map<String, dynamic>>[];
     final attendeeRows = <Map<String, dynamic>>[];
     final metCount = {for (final p in _roster) p.id: 0};
+
+    /// Pair key -> the smallest day offset the two shared a meet-up at.
+    final together = <String, int>{};
 
     void addEvent(int dayOffset, List<_Seeded> attendees, {String? place}) {
       if (attendees.isEmpty) return;
@@ -202,11 +173,22 @@ Future<void> seedFixture(SupabaseClient c, String profileId) async {
         'id': id,
         'owner_id': profileId,
         'occurred_on': dayAgo(dayOffset).toIso8601String().substring(0, 10),
-        'place': ?place,
+        'place': place,
       });
+      // Every meet-up is one you were at, so the me-node's links stay as fresh
+      // as the person on the other end of them.
+      attendeeRows.add({'event_id': id, 'person_id': mePersonId});
       for (final a in attendees) {
         attendeeRows.add({'event_id': id, 'person_id': a.id});
         metCount[a.id] = metCount[a.id]! + 1;
+      }
+      for (var i = 0; i < attendees.length; i++) {
+        for (var j = i + 1; j < attendees.length; j++) {
+          final x = attendees[i].id, y = attendees[j].id;
+          final k = x.compareTo(y) < 0 ? '$x|$y' : '$y|$x';
+          final prev = together[k];
+          if (prev == null || dayOffset < prev) together[k] = dayOffset;
+        }
       }
     }
 
@@ -289,6 +271,54 @@ Future<void> seedFixture(SupabaseClient c, String profileId) async {
       if (metCount[p.id]! > 0) continue;
       final day = (p.gapDays ?? 300) + r.nextInt(40);
       addEvent(day, [p], place: r.pick(_places));
+    }
+
+    // --- relationships ------------------------------------------------------
+    // Built after the events so the extra edges follow real co-attendance: a
+    // link nobody ever met across renders as already collapsed.
+    final pairs = <String>{};
+    final relRows = <Map<String, dynamic>>[];
+    void link(String x, String y) {
+      if (x == y) return;
+      final (a, b) = x.compareTo(y) < 0 ? (x, y) : (y, x);
+      if (!pairs.add('$a|$b')) return;
+      relRows.add({
+        'id': _uuid('$profileId:rel:$a:$b'),
+        'owner_id': profileId,
+        'a_person_id': a,
+        'b_person_id': b,
+      });
+    }
+
+    for (final context in Contexts.all) {
+      final group = [
+        for (final p in _roster)
+          if (p.context == context) p,
+      ];
+      if (group.length < 5) continue;
+      for (var i = 0; i < group.length; i++) {
+        link(group[i].id, group[(i + 1) % group.length].id);
+      }
+      link(group[0].id, group[2].id);
+      link(group[1].id, group[4].id);
+    }
+    final shared = together.entries.toList()
+      ..sort((a, b) => a.value.compareTo(b.value));
+    for (final s in shared) {
+      if (relRows.length >= 50) break;
+      final parts = s.key.split('|');
+      link(parts[0], parts[1]);
+    }
+    // Deterministic sweep so the fixture can never depend on co-attendance
+    // reaching 50 — a demo must not be able to hang here.
+    for (var i = 0; i < _roster.length && relRows.length < 50; i++) {
+      for (var j = i + 1; j < _roster.length && relRows.length < 50; j++) {
+        link(_roster[i].id, _roster[j].id);
+      }
+    }
+    // You know everyone in your own graph: the centre node needs springs.
+    for (final p in _roster) {
+      link(mePersonId, p.id);
     }
 
     await c.from('people').insert(peopleRows);

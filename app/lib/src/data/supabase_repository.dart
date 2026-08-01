@@ -388,23 +388,28 @@ class SupabaseGraphRepository implements GraphRepository {
       }
     }
 
-    // Realtime when it works, polling when it does not. Both, always.
-    _channel =
-        _c
-            .channel('invitations-${_c.auth.currentUser?.id ?? 'anon'}')
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'invitations',
-              callback: (_) => refresh(),
-            )
-            .onPostgresChanges(
-              event: PostgresChangeEvent.all,
-              schema: 'public',
-              table: 'invitation_recipients',
-              callback: (_) => refresh(),
-            )
-          ..subscribe();
+    // Realtime when it works, polling when it does not. Both, always. A socket
+    // that cannot open must not take the stream — or the boot — down with it.
+    try {
+      _channel =
+          _c
+              .channel('invitations-${_c.auth.currentUser?.id ?? 'anon'}')
+              .onPostgresChanges(
+                event: PostgresChangeEvent.all,
+                schema: 'public',
+                table: 'invitations',
+                callback: (_) => refresh(),
+              )
+              .onPostgresChanges(
+                event: PostgresChangeEvent.all,
+                schema: 'public',
+                table: 'invitation_recipients',
+                callback: (_) => refresh(),
+              )
+            ..subscribe();
+    } catch (_) {
+      _channel = null;
+    }
 
     _poll = Timer.periodic(const Duration(seconds: 5), (_) => refresh());
     refresh();

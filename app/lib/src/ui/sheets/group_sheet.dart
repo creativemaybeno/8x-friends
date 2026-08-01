@@ -9,8 +9,31 @@ import '../../state/app_state.dart';
 import '../../theme/tokens.dart';
 import 'sheet_scaffold.dart';
 
-class GroupSheet extends StatelessWidget {
+class GroupSheet extends StatefulWidget {
   const GroupSheet({super.key});
+
+  @override
+  State<GroupSheet> createState() => _GroupSheetState();
+}
+
+class _GroupSheetState extends State<GroupSheet> {
+  /// Which anchor RESHUFFLE lands on next. `assembleGroup` is deterministic,
+  /// so without this the button would recompute the identical five.
+  int _anchorIndex = 0;
+
+  void _reshuffle(AppState state) {
+    final candidates =
+        [
+          for (final p in state.people)
+            if (!p.isMe) p,
+        ]..sort(
+          (a, b) =>
+              state.decay.decayOf(b.id).compareTo(state.decay.decayOf(a.id)),
+        );
+    if (candidates.isEmpty) return;
+    _anchorIndex = (_anchorIndex + 1) % candidates.length;
+    state.assembleGroupFrom(candidates[_anchorIndex]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +73,7 @@ class GroupSheet extends StatelessWidget {
           Expanded(
             child: SheetButton(
               label: 'RESHUFFLE',
-              onTap: () => state.assembleGroupFrom(null),
+              onTap: () => _reshuffle(state),
             ),
           ),
           const SizedBox(width: Tokens.gapS),

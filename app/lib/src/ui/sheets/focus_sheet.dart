@@ -61,7 +61,7 @@ class FocusSheet extends StatelessWidget {
           const SizedBox(width: Tokens.gapS),
           Expanded(
             child: SheetButton(
-              label: 'BUILD A GROUP AROUND THEM',
+              label: 'BUILD A GROUP',
               onTap: () {
                 state.assembleGroupFrom(person);
                 state.setMode(AppMode.group);
@@ -84,7 +84,8 @@ class FocusSheet extends StatelessWidget {
               Expanded(
                 child: _Stat(
                   caption: 'BIRTHDAY',
-                  value: person.birthdayDay == null
+                  value:
+                      person.birthdayDay == null || person.birthdayMonth == null
                       ? '—'
                       : '${person.birthdayDay}/${person.birthdayMonth}',
                 ),

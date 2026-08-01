@@ -48,8 +48,7 @@ abstract final class Tokens {
     'hood': Color(0xFFC9A6FF),
   };
 
-  static Color contextColor(String? context) =>
-      contextColors[context] ?? cyan;
+  static Color contextColor(String? context) => contextColors[context] ?? cyan;
 
   /// Node fill = context colour lerped toward the sink by `0.15 + decay*0.66`.
   static Color nodeFill(String? context, double decay) =>
