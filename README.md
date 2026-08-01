@@ -31,7 +31,27 @@ make app-run
 
 Both of us work from one shared Claude account, so the Claude Design project is
 the single source of truth for designs — read and edit them there directly.
-Nothing is mirrored into Git.
+The editable design files are not mirrored into Git; the gallery below is a
+committed visual preview for hackathon reviewers.
+
+## App preview
+
+8x Friends helps people notice when a valued relationship is fading, make a
+low-friction plan, and see real-world meetups renew their social graph.
+
+<p align="center">
+  <img src="docs/assets/screenshots/01-home-relationship-health.png" alt="Relationship health graph showing a fading connection to Yassie" width="30%" />
+  <img src="docs/assets/screenshots/06-invitation.png" alt="Invitation from Calvin to meet on Saturday" width="30%" />
+  <img src="docs/assets/screenshots/09-add-from-your-circle.png" alt="Adding people from a friend circle to a planned meetup" width="30%" />
+</p>
+<p align="center">
+  <img src="docs/assets/screenshots/13-plan-detail.png" alt="Meetup plan detail for Calvin, Yassie, and Hannan" width="30%" />
+  <img src="docs/assets/screenshots/17-connection-renewed.png" alt="Confirmation that a relationship has been renewed after meeting" width="30%" />
+  <img src="docs/assets/screenshots/21-consented-connection.png" alt="A newly accepted, neutral social connection" width="30%" />
+</p>
+
+The preview illustrates the prototype flow: **notice → invite → gather → meet →
+renew**, with consent required before new direct connections are created.
 
 **[8x Friends: Offline Facebook](https://claude.ai/design/p/9783b908-0e28-4a55-89fe-70bd0b95a59e)**
 
