@@ -1,4 +1,0 @@
-{
-  "_readme": "Copy to design/target.local.json (gitignored) only if automatic resolution picks the wrong project. Normally you need neither file: tools/design/sync.mjs matches your `git config user.name` against the `git` field of an entry in design/sync.json.",
-  "handle": "creativecreatorormaybenot"
-}
