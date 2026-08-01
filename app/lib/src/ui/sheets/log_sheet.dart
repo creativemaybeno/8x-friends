@@ -11,10 +11,17 @@ import 'sheet_scaffold.dart';
 /// The three answers to "when". Anything older is rare enough to leave out —
 /// this flow has to be finishable in the time it takes to walk to the tram.
 const _whenChips = <(String, int)>[
-  ('TODAY', 0),
-  ('YESTERDAY', 1),
-  ('THIS WEEK', 4),
+  ('today', 0),
+  ('yesterday', 1),
+  ('this week', 4),
 ];
+
+/// `Tomás` · `Tomás and Bruno` · `Tomás, Bruno and Saga`.
+String _joinNames(List<String> names) => switch (names.length) {
+  0 => '',
+  1 => names.first,
+  _ => '${names.sublist(0, names.length - 1).join(', ')} and ${names.last}',
+};
 
 class LogSheet extends StatefulWidget {
   const LogSheet({super.key});
@@ -24,7 +31,7 @@ class LogSheet extends StatefulWidget {
 }
 
 class _LogSheetState extends State<LogSheet> {
-  final Set<String> _selected = {};
+  final Set<String> _selected = <String>{};
   int _daysBack = 0;
   bool _seeded = false;
 
@@ -45,69 +52,61 @@ class _LogSheetState extends State<LogSheet> {
   @override
   Widget build(BuildContext context) {
     final state = AppScope.of(context);
-    final decay = state.decay;
-    final people = state.directPeople;
-    final chosen = <String>[
+
+    // The people who have been waiting longest come first.
+    final people = [...state.directPeople]
+      ..sort((a, b) => state.decayWith(b.id).compareTo(state.decayWith(a.id)));
+    final chosen = [
       for (final p in people)
-        if (_selected.contains(p.id)) p.id,
+        if (_selected.contains(p.id)) p,
     ];
 
     return SheetScaffold(
-      label: 'LOG A MEET-UP',
-      title: 'Who were you with?',
-      subtitle: 'Adding it now keeps the graph honest.',
-      onClose: state.goHome,
-      footer: SheetButton(
-        label: 'THAT HAPPENED',
-        onTap: chosen.isEmpty
-            ? null
-            : () => state.logMeetup(
-                personIds: chosen,
-                on: state.now.subtract(Duration(days: _daysBack)),
-              ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('WHEN', style: Tokens.monoLabelDim),
-          const SizedBox(height: Tokens.gapS),
-          Wrap(
-            spacing: Tokens.gapXs,
-            runSpacing: Tokens.gapXs,
-            children: [
-              for (final (label, days) in _whenChips)
-                SheetChip(
-                  label: label,
-                  selected: _daysBack == days,
-                  onTap: () => setState(() => _daysBack = days),
+      label: 'log a meetup',
+      labelMark: Tokens.lime,
+      labelRight: chosen.isEmpty ? 'nobody yet' : '${chosen.length} selected',
+      title: chosen.isEmpty
+          ? 'Who did you see?'
+          : _joinNames([for (final p in chosen) p.name]),
+      read: 'Tap the people, then pick the day it happened.',
+      chips: [
+        for (final (label, days) in _whenChips)
+          SheetChip(
+            label: label,
+            selected: _daysBack == days,
+            onTap: () => setState(() => _daysBack = days),
+          ),
+      ],
+      rows: [
+        for (final p in people)
+          SheetRow(
+            initial: p.initial,
+            title: p.name,
+            sub: agoLabel(state.daysWith(p.id)),
+            meta: _selected.contains(p.id) ? 'in' : null,
+            metaColor: Tokens.limeDeep,
+            selected: _selected.contains(p.id),
+            onTap: () => setState(() {
+              if (!_selected.remove(p.id)) _selected.add(p.id);
+            }),
+          ),
+      ],
+      actions: [
+        SheetAction(
+          label: 'Log it',
+          onTap: chosen.isEmpty
+              ? null
+              : () => state.logMeetup(
+                  personIds: [for (final p in chosen) p.id],
+                  on: state.now.subtract(Duration(days: _daysBack)),
                 ),
-            ],
-          ),
-          const SizedBox(height: Tokens.gapM),
-          Row(
-            children: [
-              Expanded(
-                child: Text('WHO WAS THERE', style: Tokens.monoLabelDim),
-              ),
-              Text(
-                chosen.isEmpty ? 'NOBODY YET' : '${chosen.length} SELECTED',
-                style: Tokens.monoLabel,
-              ),
-            ],
-          ),
-          const SizedBox(height: Tokens.gapS),
-          for (final p in people)
-            SheetRow(
-              title: p.name,
-              meta: agoLabel(decay.daysOf(p.id)),
-              dot: Tokens.contextColor(p.context),
-              selected: _selected.contains(p.id),
-              onTap: () => setState(() {
-                if (!_selected.remove(p.id)) _selected.add(p.id);
-              }),
-            ),
-        ],
-      ),
+        ),
+        SheetAction(
+          label: 'Close',
+          kind: SheetActionKind.ghost,
+          onTap: state.goHome,
+        ),
+      ],
     );
   }
 }

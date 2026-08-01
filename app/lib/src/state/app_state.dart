@@ -13,9 +13,10 @@ import '../model/models.dart';
 import '../notify/notifications.dart';
 import '../theme/tokens.dart';
 
-/// A freshly consented connection starts neutral, not warm: this many days
-/// back is decay ~0.57 with the default horizon.
-const int _newEdgeSeedDays = 120;
+/// A consented edge arrives at *neutral*, not warm: permission makes a
+/// connection, only meeting builds it. 77 days against the default 30-day
+/// cadence (horizon 180) lands decay at ~0.5.
+const int _newEdgeSeedDays = 77;
 
 /// Phases whose attendees still wear a plan ring in the graph.
 const Set<PlanPhase> _ringPhases = {
@@ -190,7 +191,9 @@ class AppState extends ChangeNotifier {
   (double, double) get _camera =>
       Tokens.cameraByMode[_mode] ?? const (0.8, 0.0);
 
-  double get cameraZoom => _camera.$1;
+  double get cameraZoom => _view == GraphView.distance
+      ? _camera.$1 * Tokens.distanceZoomFactor
+      : _camera.$1;
 
   Offset get cameraTarget => Offset(0, _camera.$2);
 
@@ -244,6 +247,45 @@ class AppState extends ChangeNotifier {
     ];
   }
 
+  /// My direct edge to [personId], if we have one.
+  Relationship? edgeWith(String personId) {
+    if (meId.isEmpty) return null;
+    for (final r in _relationships) {
+      if (r.other(meId) == personId) return r;
+    }
+    return null;
+  }
+
+  /// How faded my tie to [personId] is. 0 fresh, 1 gone. Falls back to the
+  /// neutral 0.5 an indirect connection reads at.
+  double decayWith(String personId) {
+    final r = edgeWith(personId);
+    return r == null ? 0.5 : _decay.linkDecayOf(r);
+  }
+
+  /// Days since [personId] and I were last in the same room.
+  double daysWith(String personId) {
+    final r = edgeWith(personId);
+    return r == null ? kNeverMetDays : _decay.linkDaysOf(r);
+  }
+
+  /// Everyone I have a direct edge to.
+  int get circleCount => directPeople.length;
+
+  /// How many of those ties are in trouble. The second half of the caption
+  /// line under the graph.
+  int get driftingCount {
+    if (meId.isEmpty) return 0;
+    var n = 0;
+    for (final r in _relationships) {
+      if (r.touches(meId) && _decay.linkDecayOf(r) > 0.55) n++;
+    }
+    return n;
+  }
+
+  /// The people I could reach through a mutual, most-connected first.
+  List<Person> get reachablePeople => indirectPeople;
+
   // --- the plan -------------------------------------------------------------
 
   Plan? _plan;
@@ -268,6 +310,69 @@ class AppState extends ChangeNotifier {
     final p = _plan;
     if (p == null || !_ringPhases.contains(p.phase)) return const {};
     return p.pendingIds.toSet();
+  }
+
+  /// Who wears the lime plan dot: everyone who has said yes.
+  Set<String> get markIds {
+    final p = _plan;
+    if (p == null || !_ringPhases.contains(p.phase)) return const {};
+    return p.acceptedIds.toSet();
+  }
+
+  /// What the ring around the planned group is called.
+  String get clusterLabel {
+    final p = _plan;
+    if (p == null) return 'planned';
+    if (p.phase == PlanPhase.past) return 'last night';
+    if (p.phase == PlanPhase.renewed) return 'renewed';
+    return p.pendingIds.isEmpty ? 'planned' : 'draft plan';
+  }
+
+  /// The outstanding connection request, as an unordered pair. Drawn as a
+  /// fine dotted tether — a consent question, not an edge.
+  (String, String)? get requestPair {
+    for (final r in _requests) {
+      if (!r.accepted && (r.fromPersonId == meId || r.toPersonId == meId)) {
+        return (r.fromPersonId, r.toPersonId);
+      }
+    }
+    return null;
+  }
+
+  /// People I am not connected to who must still be on my graph.
+  ///
+  /// The graph is my circle plus whoever the story has put in front of me:
+  /// someone I am focused on, everyone in the plan (**including after it has
+  /// renewed** — Calvin has to be able to reach Hannan afterwards), whoever a
+  /// connection request is with, and whoever I just connected to.
+  Set<String> get spotlightIds {
+    final out = <String>{};
+    final f = _focusedPersonId;
+    if (f != null) out.add(f);
+    final p = _plan;
+    if (p != null && p.phase != PlanPhase.cancelled) {
+      out.addAll(p.attendees.keys);
+    }
+    final req = requestPair;
+    if (req != null) {
+      out
+        ..add(req.$1)
+        ..add(req.$2);
+    }
+    for (final r in _liveEdges) {
+      out
+        ..add(r.aPersonId)
+        ..add(r.bPersonId);
+    }
+    out.remove(meId);
+    return out;
+  }
+
+  /// The edge that just came into existence, so the graph can label it `new`.
+  (String, String)? get freshEdgePair {
+    if (_liveEdges.isEmpty) return null;
+    final r = _liveEdges.last;
+    return (r.aPersonId, r.bPersonId);
   }
 
   void proposePlan({
@@ -527,14 +632,26 @@ class AppState extends ChangeNotifier {
     _requests[i] = accepted;
     _addLiveEdge(accepted.fromPersonId, accepted.toPersonId);
     _send('connection', {'request': accepted.toJson()});
-    showToast('${_nameOf(personId)} accepted. You are connected.');
+    _alert(
+      '${_nameOf(personId)} accepted',
+      'You have a direct connection. It starts neutral — meet to build it.',
+      AppMode.home,
+    );
   }
 
   void _addLiveEdge(String a, String b) {
     if (a.isEmpty || b.isEmpty || a == b) return;
     final key = Relationship.keyFor(a, b);
     if (_relationships.any((r) => r.key == key)) return;
-    _liveEdges.add(Relationship(id: 'live-$key', aPersonId: a, bPersonId: b));
+    _liveEdges.add(
+      Relationship(
+        id: 'live-$key',
+        aPersonId: a,
+        bPersonId: b,
+        cadenceDays: 30,
+        seedDaysSince: _newEdgeSeedDays,
+      ),
+    );
     _liveEvents.add(
       Event(
         id: 'neutral-$key',
@@ -604,6 +721,7 @@ class AppState extends ChangeNotifier {
   void _alert(String title, String body, AppMode mode) {
     unawaited(Notifications.show(title, body));
     _showBanner(AppNotification(title: title, body: body, mode: mode));
+    _notify();
   }
 
   // --- toast ----------------------------------------------------------------
@@ -659,12 +777,13 @@ class AppState extends ChangeNotifier {
 
   void _askDidItHappen(Plan p) {
     final names = _joinNames([
-      for (final id in p.attendeeIds)
+      for (final id in p.acceptedIds)
         if (id != meId) _nameOf(id),
     ]);
+    final place = p.place;
     _alert(
-      'Did you meet up?',
-      'Yesterday with $names. Tap to confirm.',
+      place == null ? 'Did you meet up?' : 'Did you make it to $place?',
+      '${_humanWhen(p.when)}, with $names.',
       AppMode.confirm,
     );
   }
@@ -768,9 +887,10 @@ class AppState extends ChangeNotifier {
     _plan = incoming;
 
     if (isNew && incoming.attendees[meId] == Attendance.invited) {
+      final where = incoming.place == null ? '' : ' at ${incoming.place}';
       _alert(
         '${_nameOf(incoming.hostPersonId)} wants to see you',
-        '${_humanWhen(incoming.when)} · tap to answer',
+        '${_humanWhen(incoming.when)}$where. Tap to answer.',
         AppMode.invitation,
       );
       _notify();
@@ -807,7 +927,14 @@ class AppState extends ChangeNotifier {
           if (!prev.attendees.containsKey(id) && id != meId) _nameOf(id),
       ];
       if (added.isNotEmpty) {
-        showToast('${_joinNames(added)} joined the plan.');
+        // Calvin learns Hannan was added by watching his own graph gather.
+        final by = _nameOf(_otherSideOf(incoming));
+        final where = incoming.place == null ? '' : ' at ${incoming.place}';
+        _alert(
+          '$by added ${_joinNames(added)}',
+          'Deciding now. ${_humanWhen(incoming.when)}$where.',
+          AppMode.planDetail,
+        );
         return;
       }
       final accepted = [
@@ -844,7 +971,11 @@ class AppState extends ChangeNotifier {
         final other = incoming.fromPersonId == meId
             ? incoming.toPersonId
             : incoming.fromPersonId;
-        showToast('${_nameOf(other)} accepted. You are connected.');
+        _alert(
+          '${_nameOf(other)} accepted',
+          'You have a direct connection. It starts neutral — meet to build it.',
+          AppMode.home,
+        );
         return;
       }
       showToast(

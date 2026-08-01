@@ -138,7 +138,7 @@ class _GraphViewState extends State<GraphView>
     _dragging?.pinned = false;
     _dragging = null;
     final world = _toWorld(d.localPosition);
-    if (_planIconAt(world, state) != null) {
+    if (_planMarkAt(world, state) != null) {
       state.setMode(AppMode.planDetail);
       return;
     }
@@ -150,18 +150,17 @@ class _GraphViewState extends State<GraphView>
     state.focusPerson(hit.id);
   }
 
-  /// The plan badge sits above the node, so it needs its own hit test — the
-  /// node's own circle is too far away to catch it.
-  SimNode? _planIconAt(Offset world, AppState state) {
-    if (state.planIds.isEmpty) return null;
+  /// The lime plan dot sits up and to the right of the node, so it needs its
+  /// own hit test — the node's own circle is too far away to catch it.
+  SimNode? _planMarkAt(Offset world, AppState state) {
+    if (state.markIds.isEmpty) return null;
     if (!world.dx.isFinite || !world.dy.isFinite) return null;
-    final threshold = Tokens.planIconRadius + _worldSlop;
+    final threshold = Tokens.planMarkRadius + _worldSlop;
     SimNode? best;
     var bestD = double.infinity;
     for (final n in _sim.nodes) {
-      if (!state.planIds.contains(n.id)) continue;
-      if (state.pendingIds.contains(n.id)) continue;
-      final centre = GraphPainter.planIconCentre(n);
+      if (!state.markIds.contains(n.id)) continue;
+      final centre = GraphPainter.planMarkCentre(n);
       if (!centre.dx.isFinite || !centre.dy.isFinite) continue;
       final dist = (centre - world).distance;
       if (dist <= threshold && dist < bestD) {
@@ -182,8 +181,13 @@ class _GraphViewState extends State<GraphView>
     _sim.view = state.view;
     _sim.planIds = state.planIds;
     _sim.pendingIds = state.pendingIds;
-    _sim.planLinkKeys = planLinkKeys;
-    _sim.sync(state.people, state.relationships, state.decay, state.meId);
+    _sim.focusId = state.focusedPersonId;
+    _sim.sync(
+      _visiblePeople(state),
+      state.relationships,
+      state.decay,
+      state.meId,
+    );
 
     if (state.cameraTarget != _lastCameraTarget ||
         state.cameraZoom != _lastZoomTarget ||
@@ -223,17 +227,21 @@ class _GraphViewState extends State<GraphView>
             size: _size,
             painter: GraphPainter(
               sim: _sim,
-              decay: state.decay,
               camera: _camera,
               zoom: _zoom,
+              meId: state.meId,
               highlighted: highlighted,
               dimOthers: _dim,
               focusedId: state.focusedPersonId,
               t: _sim.time,
               planIds: state.planIds,
               pendingIds: state.pendingIds,
+              markIds: state.markIds,
               planLinkKeys: planLinkKeys,
               renewingKeys: state.renewingKeys,
+              requestPair: state.requestPair,
+              freshEdgePair: state.freshEdgePair,
+              clusterLabel: state.clusterLabel,
               names: {for (final p in state.people) p.id: p.name},
               view: state.view,
             ),
@@ -241,6 +249,25 @@ class _GraphViewState extends State<GraphView>
         );
       },
     );
+  }
+
+  /// Me, my circle, and only the people outside it the moment needs: whoever
+  /// is focused, in the plan, in a request, or newly connected.
+  List<Person> _visiblePeople(AppState state) {
+    final meId = state.meId;
+    if (meId.isEmpty) return state.people;
+    // `spotlightIds` outlives `planIds`: once a plan renews it stops drawing a
+    // cluster, but Hannan has to stay on Calvin's graph so he can be asked to
+    // connect. That is act 5.
+    final keep = <String>{
+      meId,
+      for (final p in state.directPeople) p.id,
+      ...state.spotlightIds,
+    };
+    return [
+      for (final p in state.people)
+        if (keep.contains(p.id)) p,
+    ];
   }
 
   /// Every unordered pair of attendees. These are drawn dashed whether or not

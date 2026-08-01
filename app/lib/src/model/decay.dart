@@ -137,38 +137,17 @@ class DecayModel {
       return;
     }
 
-    // Pass 1: anyone with >= 3 meet-ups gets median gap * 3, clamped 90..540.
-    final direct = <String, double>{};
+    // A person's horizon is the mean of their relationships' own horizons.
+    // Four months without a weekly friend is an emergency; four months
+    // without a twice-a-year friend is nothing.
     for (final p in people) {
-      final dates = _meets[p.id] ?? const <DateTime>[];
-      if (dates.length < 3) continue;
-      final gaps = <double>[
-        for (var i = 1; i < dates.length; i++)
-          daysBetween(dates[i - 1], dates[i]),
-      ]..sort();
-      final mid = gaps.length ~/ 2;
-      final median = gaps.length.isOdd
-          ? gaps[mid]
-          : (gaps[mid - 1] + gaps[mid]) / 2;
-      direct[p.id] = median.clamp(30.0, 180.0) * 3; // -> 90..540
-    }
-
-    // Pass 2: everyone else inherits the mean horizon of linked neighbours
-    // that have one; failing that, the global horizon.
-    for (final p in people) {
-      final own = direct[p.id];
-      if (own != null) {
-        personHorizon[p.id] = own;
-        continue;
-      }
-      final neighbourHorizons = <double>[
+      final own = <double>[
         for (final r in relationships)
-          if (r.touches(p.id)) ?direct[r.other(p.id)],
+          if (r.touches(p.id)) r.horizonDays,
       ];
-      personHorizon[p.id] = neighbourHorizons.isEmpty
+      personHorizon[p.id] = own.isEmpty
           ? horizon
-          : neighbourHorizons.reduce((a, b) => a + b) /
-                neighbourHorizons.length;
+          : own.reduce((a, b) => a + b) / own.length;
     }
   }
 
@@ -183,10 +162,10 @@ class DecayModel {
 
   double linkDaysOf(Relationship r) => linkDays[r.key] ?? kNeverMetDays;
 
-  double linkDecayOf(Relationship r) {
-    final h = (horizonOf(r.aPersonId) + horizonOf(r.bPersonId)) / 2;
-    return decayFor(linkDaysOf(r), horizon: h);
-  }
+  /// `horizon = clamp(cadence * 6, 60, 900)`, learned from the pair's own
+  /// rhythm rather than one global cadence.
+  double linkDecayOf(Relationship r) =>
+      decayFor(linkDaysOf(r), horizon: r.horizonDays);
 
   /// Number of recorded meet-ups involving [personId] on or before [now].
   int meetCount(String personId) => _meets[personId]?.length ?? 0;

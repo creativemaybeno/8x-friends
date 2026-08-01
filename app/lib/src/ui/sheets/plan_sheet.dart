@@ -9,21 +9,24 @@ import '../../theme/tokens.dart';
 import 'invitation_sheet.dart' show humanWhen;
 import 'sheet_scaffold.dart';
 
-/// The attendee avatar sitting left of the row.
-const double _avatarSize = 34.0;
+const _weekdays = <String>[
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
+];
 
-/// Someone who has not answered yet is present but not certain.
-const double _pendingOpacity = 0.45;
+/// `19:00` — the machine voice writes time in twenty-four hours.
+String _hhmm(DateTime when) =>
+    '${when.hour.toString().padLeft(2, '0')}:'
+    '${when.minute.toString().padLeft(2, '0')}';
 
-/// Where an attendee stands, in the machine's voice.
-String _attendanceLabel(Attendance? a, {required bool isHost}) {
-  if (isHost) return 'HOST';
-  return switch (a) {
-    Attendance.accepted => 'IN',
-    Attendance.declined => "CAN'T MAKE IT",
-    _ => 'WAITING',
-  };
-}
+/// `Saturday 19:00`.
+String _dayTime(DateTime when) =>
+    '${_weekdays[(when.weekday - 1) % 7]} ${_hhmm(when)}';
 
 /// Host first, then everyone who is in, then everyone still deciding.
 int _rank(String id, Plan plan) {
@@ -35,7 +38,7 @@ int _rank(String id, Plan plan) {
   };
 }
 
-/// The plan behind the icon on a graph node.
+/// The plan behind a lime node in the graph.
 class PlanSheet extends StatelessWidget {
   const PlanSheet({super.key});
 
@@ -46,12 +49,16 @@ class PlanSheet extends StatelessWidget {
 
     if (plan == null) {
       return SheetScaffold(
-        label: 'UPCOMING',
-        title: 'Nothing planned yet',
-        subtitle: 'Tap someone in the graph and plan something with them.',
-        accent: Tokens.violet,
-        onClose: state.goHome,
-        child: const SizedBox.shrink(),
+        label: 'planned meetup',
+        title: 'Nothing planned yet.',
+        read: 'Tap someone in the graph and plan something with them.',
+        actions: [
+          SheetAction(
+            label: 'Close',
+            kind: SheetActionKind.ghost,
+            onTap: state.goHome,
+          ),
+        ],
       );
     }
 
@@ -63,90 +70,57 @@ class PlanSheet extends StatelessWidget {
         state.personById(b)?.name ?? b,
       );
     });
-    final inCount = plan.acceptedIds.length;
-    final waitingCount = plan.pendingIds.length;
+
+    final where = plan.place;
+    final iAmHost = state.isMe(plan.hostPersonId);
 
     return SheetScaffold(
-      label: 'UPCOMING',
-      title: humanWhen(plan.when, now: state.now),
-      subtitle: plan.place ?? 'Somewhere you both like.',
-      accent: Tokens.violet,
-      onClose: state.goHome,
-      footer: Row(
-        children: [
-          Expanded(
-            child: SheetGhostButton(
-              label: 'RESCHEDULE',
-              accent: Tokens.violet,
-              onTap: () => state.setMode(AppMode.proposeTime),
-            ),
+      label: 'planned meetup',
+      labelMark: Tokens.lime,
+      labelRight: '${plan.acceptedIds.length} going',
+      title: where == null
+          ? humanWhen(plan.when, now: state.now)
+          : '$where — ${_dayTime(plan.when)}',
+      rows: [
+        for (final id in ids)
+          SheetRow(
+            initial: state.personById(id)?.initial ?? '?',
+            title: state.isMe(id)
+                ? 'You'
+                : (state.personById(id)?.name ?? 'Someone'),
+            sub: id == plan.hostPersonId ? 'host' : null,
+            meta: switch (plan.attendees[id]) {
+              Attendance.accepted => 'in',
+              Attendance.declined => 'out',
+              _ => 'waiting',
+            },
+            metaColor: switch (plan.attendees[id]) {
+              Attendance.accepted => Tokens.limeDeep,
+              Attendance.declined => Tokens.clay,
+              _ => Tokens.mut,
+            },
           ),
-          const SizedBox(width: Tokens.gapS),
-          Expanded(
-            child: SheetGhostButton(
-              label: 'CANCEL PLAN',
-              accent: Tokens.amber,
-              onTap: state.cancelPlan,
-            ),
+      ],
+      note:
+          'No reminder will be sent. The morning after you will be asked '
+          'once whether it happened.',
+      actions: [
+        SheetAction(
+          label: 'Bring someone',
+          onTap: () => state.setMode(AppMode.circle),
+        ),
+        SheetAction(
+          label: 'Close',
+          kind: SheetActionKind.ghost,
+          onTap: state.goHome,
+        ),
+        if (iAmHost)
+          SheetAction(
+            label: 'Cancel plan',
+            kind: SheetActionKind.ghost,
+            onTap: state.cancelPlan,
           ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final id in ids)
-            _AttendeeRow(
-              person: state.personById(id),
-              id: id,
-              attendance: plan.attendees[id],
-              isHost: id == plan.hostPersonId,
-              isMe: state.isMe(id),
-            ),
-          const SizedBox(height: Tokens.gapS),
-          Text(
-            '$inCount IN · $waitingCount WAITING',
-            style: Tokens.monoLabelBright.copyWith(color: Tokens.violet),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One person in the plan, dimmed while they have not answered.
-class _AttendeeRow extends StatelessWidget {
-  const _AttendeeRow({
-    required this.person,
-    required this.id,
-    required this.attendance,
-    required this.isHost,
-    required this.isMe,
-  });
-
-  final Person? person;
-  final String id;
-  final Attendance? attendance;
-  final bool isHost;
-  final bool isMe;
-
-  @override
-  Widget build(BuildContext context) {
-    final pending = !isHost && attendance == Attendance.invited;
-    final who = person ?? Person(id: id, name: id);
-    return Opacity(
-      opacity: pending ? _pendingOpacity : 1,
-      child: Row(
-        children: [
-          Avatar(person: who, size: _avatarSize, dimmed: pending),
-          const SizedBox(width: Tokens.gapS),
-          Expanded(
-            child: SheetRow(
-              title: isMe ? '${who.name} (you)' : who.name,
-              meta: _attendanceLabel(attendance, isHost: isHost),
-            ),
-          ),
-        ],
-      ),
+      ],
     );
   }
 }
